@@ -10,28 +10,30 @@ FairyMusicBox系列软件作者：bilibili@调皮的码农
 祝使用愉快！
 '''
 
-import os
+import os.path
 import math
 import mido
+
 
 DEFAULT_BPM = 120.0
 TIME_PER_BEAT = 8
 DEFAULT_TICKS_PER_BEAT = 96
 'FL导出的midi默认为此值'
-pitch_list = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78,
-              77, 76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
-pitch_dict = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 6, 84: 7, 83: 8,
-              82: 9, 81: 10, 80: 11, 79: 12, 78: 13, 77: 14, 76: 15, 75: 16,
-              74: 17, 73: 18, 72: 19, 71: 20, 70: 21, 69: 22, 67: 23, 65: 24,
-              64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
+
+PITCH_TO_MBNUM = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78,
+                  77, 76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
+MBNUM_TO_PITCH = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 6, 84: 7, 83: 8,
+                  82: 9, 81: 10, 80: 11, 79: 12, 78: 13, 77: 14, 76: 15, 75: 16,
+                  74: 17, 73: 18, 72: 19, 71: 20, 70: 21, 69: 22, 67: 23, 65: 24,
+                  64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
 
 
 def pitch2MBnum(pitch):
-    return pitch_dict[pitch]
+    return MBNUM_TO_PITCH[pitch]
 
 
 def MBnum2pitch(MBnum):
-    return pitch_list[MBnum]
+    return PITCH_TO_MBNUM[MBnum]
 
 
 class EmidTrack(list):
@@ -58,19 +60,19 @@ class EmidTrack(list):
 class EmidFile:
     '带有bpm信息，但是保存为emid文件时会丢失'
 
-    def __init__(self, filename=None, file=None, bpm: float = DEFAULT_BPM):
-        self.filename = filename
+    def __init__(self, file=None, bpm: float = DEFAULT_BPM):
         self.tracks = []
         self.length = 0
         self.bpm = bpm
 
-        if file is not None:
-            self._load(file)
-        elif self.filename is not None:
-            with open(self.filename, 'r', encoding='utf-8') as file:
+        if type(file) == str:
+            with open(file, 'r', encoding='utf-8') as file:
                 self._load(file)
+        else:
+            self._load(file)
 
     def _load(self, file) -> None:
+        self.filename = file.name
         emidtext = file.read()
         notestext, s2 = emidtext.split('&')
         length, tracksname = s2.split('*')
@@ -144,7 +146,6 @@ class EmidFile:
                     ticks_per_beat: int = DEFAULT_TICKS_PER_BEAT) -> mido.MidiFile:
         '''
         导出midi文件
-        filename和file可以均留空
         该方法返回一个mido.MidiFile()实例
         注意：overwrite设置为True可能会覆盖现有文件！
         '''
@@ -195,15 +196,15 @@ class EmidFile:
         return midifile
 
 
-def import_Midi(filename=None, file=None, transposition: int = 0) -> EmidFile:
+def import_Midi(file, transposition: int = 0) -> EmidFile:
     '''
     导入midi
     transposition参数控制移调
     '''
-    if file is not None:
-        midifile = mido.MidiFile(file=file)
-    elif filename is not None:
-        midifile = mido.MidiFile(filename)
+    if type(file) == str:
+        midifile = mido.MidiFile(file)
+    elif type(file) == mido.MidiFile:
+        midifile = file
 
     emidfile = EmidFile()
     bpm = None
@@ -215,7 +216,7 @@ def import_Midi(filename=None, file=None, transposition: int = 0) -> EmidFile:
             if msg.type == 'note_on':
                 if msg.velocity > 0:
                     emidtime = miditime / midifile.ticks_per_beat * TIME_PER_BEAT
-                    if msg.note + transposition in pitch_dict:
+                    if msg.note + transposition in MBNUM_TO_PITCH:
                         emidtrack.add_note(msg.note + transposition, emidtime)
             elif msg.type == 'set_tempo':
                 if bpm is None:
