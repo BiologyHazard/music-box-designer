@@ -7,6 +7,6 @@ python编写的程序，用于.emid与.mid文件的互相转换，以及生成�
 
 FairyMusicBox系列软件作者：bilibili@调皮的码农
 
-需求PILmido模块
+需求PIL, mido模块
 
 祝使用愉快！
