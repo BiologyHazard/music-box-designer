@@ -446,17 +446,4 @@ if __name__ == '__main__':
     #             transposition=0,
     #             papersize=A4_VERTICAL,
     #             ppi=300)
-    # batch_export_pics(overwrite=False)
-    export_pics(r"D:\ChenXu\Musics\纸带八音盒\希望之花\希望之花.mid",
-                # filename='example_%d.png',
-                # musicname='希望之花gyulqWMPJj',
-                scale=1,
-                overwrite=True,
-                interpret_bpm=None,
-                save_pic=True,
-                transposition=0,
-                papersize=A4_VERTICAL,
-                # papersize=AUTO_SIZE,
-                ppi=300,
-                # font='simsun.ttc',
-                heading=('作者：BioHazard  交流群：586134350/959125559  请勿用于任何商业用途  打谱软件：github.com/BiologyHazard/MusicBoxDesigner', CENTER_ALIGN))
+    batch_export_pics(overwrite=False)
