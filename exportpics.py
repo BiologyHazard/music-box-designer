@@ -9,7 +9,7 @@ FairyMusicBox系列软件作者：bilibili@调皮的码农
 
 祝使用愉快！
 
-*错误处理尚不完善，由于输入的数据不合规或者本程序的bug导致的问题，作者概不负责
+*错误处理尚不完善，由于使用本程序导致的问题，作者概不负责
 *使用前请务必了解可能造成的后果
 *请备份重要文件！
 '''
@@ -62,7 +62,7 @@ INCH_TO_MM = 25.4  # 1英寸=25.4毫米
 
 DOT_R = 1.14  # 圆点半径（单位毫米）
 BORDER = 3.0  # 边框宽度（单位毫米）
-ANTI_ALIAS = 1.5  # 抗锯齿缩放倍数
+ANTI_ALIAS = 1  # 抗锯齿缩放倍数
 
 
 def _find_latest_event(l, t):
@@ -115,7 +115,7 @@ def export_pics(file,
                         默认为None
     参数 scale: 音符位置的缩放量，大于1则拉伸纸带长度，默认为1（不缩放）
     参数 heading: 一个元组，
-                heading[0]: 标题文字字符串，
+                heading[0]: 页眉文字字符串，
                 heading[1]: exportpics.LEFT_ALIGN 或
                             exportpics.CENTER_ALIGN 或
                             exportpics.RIGHT_ALIGN，指定对齐方式
@@ -124,7 +124,7 @@ def export_pics(file,
     参数 papersize: 字符串或字典
                 可以使用PAPER_INFO中的预设值(例如exportpics.A4_VERTICAL)，
                 也可以使用字典来自定义，格式为
-                {'size': 一个元组(宽,高)，单位毫米,
+                {'size': 一个元组(宽, 高)，单位毫米,
                  'col': 一页的分栏数,
                  'row': 一栏的行数}
                 也可以使用exportpics.AUTO_SIZE自适应大小
@@ -132,14 +132,14 @@ def export_pics(file,
     参数 ppi: 输出图片的分辨率，单位像素/英寸，默认为DEFALT_PPI
     参数 background: 背景图片或颜色，
                     可以是用字符串表示的文件路径，
-                    也可以是PIL.PIL.Image.PIL.Image实例，
+                    也可以是PIL.Image.Image实例，
                     也可以是一个表示颜色的(R, G, B, Alpha)元组，
                     默认为(255, 255, 255, 255)，表示白色
     参数 save_pic: True 或 False，是否将图片写入磁盘，默认为True
     参数 overwrite: True 或 False，是否允许覆盖同名文件，默认为False，
                     警告：设置为True可能导致原有文件丢失，请注意备份！
 
-    函数返回包含若干PIL.Image.PIL.Image实例的list
+    函数返回包含若干PIL.Image.Image实例的list
     '''
 
     def process_emidfile(emidfile, transposition=transposition):
@@ -159,6 +159,10 @@ def export_pics(file,
         '处理midi文件'
         ticks_per_beat = midifile.ticks_per_beat
         notes = []
+        prev_time = {93: -8, 91: -8, 89: -8, 88: -8, 87: -8, 86: -8, 85: -8, 84: -8,
+                     83: -8, 82: -8, 81: -8, 80: -8, 79: -8, 78: -8, 77: -8, 76: -8,
+                     75: -8, 74: -8, 73: -8, 72: -8, 71: -8, 70: -8, 69: -8, 67: -8,
+                     65: -8, 64: -8, 62: -8, 60: -8, 55: -8, 53: -8}
 
         if interpret_bpm is not None:
             tempo_events = []
@@ -184,7 +188,8 @@ def export_pics(file,
                 miditime += msg.time
                 if msg.type == 'note_on':
                     if msg.velocity > 0:
-                        if msg.note + transposition in PITCH_TO_MBNUM:
+                        pitch = msg.note + transposition
+                        if pitch in PITCH_TO_MBNUM:
                             if interpret_bpm is None:
                                 beat = miditime / ticks_per_beat
                             else:
@@ -192,9 +197,19 @@ def export_pics(file,
                                 tempo, tick = tempo_events[i]
                                 realtime = time_passed[i] + mido.tick2second(
                                     miditime - tick, ticks_per_beat, tempo)
-                                beat = realtime / 60 * interpret_bpm
-                            notes.append([PITCH_TO_MBNUM[msg.note + transposition],
-                                          beat * 8 * scale])  # 添加note
+                                beat = realtime / 60 * interpret_bpm  # 计算beat
+
+                            time = beat * 8 * scale
+                            if time - prev_time[pitch] >= 8:
+                                prev_time[pitch] = time
+                                notes.append([PITCH_TO_MBNUM[pitch],
+                                              time])  # 添加note
+                            else:  # 如果音符过近，则直接忽略该音符
+                                print(
+                                    f'[WARN] Too Near! Note {pitch} in bar {math.floor(miditime / ticks_per_beat / 4) + 1}')
+                        else:  # 如果超出音域
+                            print(
+                                f'[WARN] Note {pitch} in bar {math.floor(miditime / ticks_per_beat / 4) + 1} is out of range')
         notes.sort(key=lambda a: (a[1], a[0]))  # 按time排序
         length = notes[-1][1]
         return notes, length
@@ -311,14 +326,14 @@ def export_pics(file,
                     xy=posconvert(
                         (startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
                          startpos[1] + 8*k + 7 - pixel2mm(textsize[1], ppi)), ppi),
-                    text=char, font=font2, fill=(0, 0, 0, 64))
+                    text=char, font=font2, fill=(0, 0, 0, 128))
             '栏右上角页码'
             textsize = font2.getsize(str(colnum))
             draw0.text(
                 xy=posconvert(
                     (startpos[0] + 70*j + 62 - pixel2mm(textsize[0], ppi),
                      startpos[1] + 8*len(musicname) + 7 - pixel2mm(textsize[1], ppi)), ppi),
-                text=str(colnum), font=font2, fill=(0, 0, 0, 64))
+                text=str(colnum), font=font2, fill=(0, 0, 0, 128))
         '画格子'
         for j in range(col if i < pages - 1 else cols):
             '半拍横线'
@@ -327,7 +342,7 @@ def export_pics(file,
                                        startpos[1] + 8*k + 4), ppi) +
                            posconvert((startpos[0] + 70*j + 6 + 2*29,
                                        startpos[1] + 8*k + 4), ppi),
-                           fill=(0, 0, 0, 80), width=1)
+                           fill=(0, 0, 0, 128), width=1)
             '整拍横线'
             for k in range(row + 1):
                 draw0.line(posconvert((startpos[0] + 70*j + 6,
@@ -446,4 +461,4 @@ if __name__ == '__main__':
     #             transposition=0,
     #             papersize=A4_VERTICAL,
     #             ppi=300)
-    batch_export_pics(overwrite=False)
+    batch_export_pics()
