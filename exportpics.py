@@ -271,7 +271,7 @@ def export_pics(file,
     if font is None:  # 在FONT_PATH中寻找第一个能使用的字体
         for i in FONT_PATH:
             try:
-                font0 = PIL.ImageFont.truetype(i, round(mm2pixel(3.3, ppi)))
+                font0 = PIL.ImageFont.truetype(i, round(mm2pixel(4, ppi)))
                 font1 = PIL.ImageFont.truetype(i, round(mm2pixel(3.4, ppi)))
                 font2 = PIL.ImageFont.truetype(i, round(mm2pixel(6, ppi)))
             except:
@@ -279,7 +279,7 @@ def export_pics(file,
             else:
                 break
     else:
-        font0 = PIL.ImageFont.truetype(font, round(mm2pixel(3.3, ppi)))
+        font0 = PIL.ImageFont.truetype(font, round(mm2pixel(4, ppi)))
         font1 = PIL.ImageFont.truetype(font, round(mm2pixel(3.4, ppi)))
         font2 = PIL.ImageFont.truetype(font, round(mm2pixel(6, ppi)))
 

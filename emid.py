@@ -2,12 +2,16 @@
 用于转换.emid文件与.mid文件
 
 作者：bilibili@Bio-Hazard
-    QQ3482991796
-    QQ群586134350
++ QQ3482991796
++ QQ群586134350
 
 FairyMusicBox系列软件作者：bilibili@调皮的码农
 
 祝使用愉快！
+
+*错误处理尚不完善，由于输入的数据不合规或者本程序的bug导致的问题，作者概不负责
+*使用前请务必了解可能造成的后果
+*请备份重要文件！
 '''
 
 import os.path
@@ -87,7 +91,7 @@ class EmidFile:
         for note in notelist:
             MBnum, time, trackname = note.split(',')
             pitch = MBnum2pitch(int(MBnum))
-            time = int(time)
+            time = float(time)
             trackidx = tracknamedict[trackname]
             self.tracks[trackidx].add_note(pitch, time)
         '更新长度'
@@ -228,13 +232,17 @@ def import_Midi(file, transposition: int = 0) -> EmidFile:
     return emidfile
 
 
-def midi2emid(midifilename, emidfilename):
+def midi2emid(midifilename, emidfilename=None):
     '快速将.mid文件转换为.emid文件'
+    if emidfilename is None:
+        emidfilename = os.path.splitext(midifilename)[0] + '.emid'
     import_Midi(midifilename).save(emidfilename)
 
 
-def emid2midi(emidfilename, midifilename):
+def emid2midi(emidfilename, midifilename=None):
     '快速将.emid文件转换为.mid文件'
+    if midifilename is None:
+        midifilename = os.path.splitext(emidfilename)[0] + '.mid'
     EmidFile(emidfilename).export_Midi(midifilename)
 
 
@@ -280,4 +288,4 @@ if __name__ == '__main__':
     # emidfile1.save('example1.emid')
     # emidfile2 = EmidFile('example2.emid')
     # emidfile2.export_Midi('example2.mid')
-    batch_conv_midi2emid()
+    batch_conv_emid2midi()
