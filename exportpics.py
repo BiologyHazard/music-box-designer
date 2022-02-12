@@ -51,7 +51,7 @@ PAPER_INFO = {A4_VERTICAL: {'size': (210, 297), 'col': 3, 'row': 35},
               B4_HORIZONAL: {'size': (353, 250), 'col': 5, 'row': 29}}
 
 FONT_PATH = [
-    r'C:/Windows/Fonts/Deng.ttf'
+    r'C:\Windows\Fonts\Deng.ttf'
     'C:\\Users\\' + os.getlogin() +
     r'\AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf',  # 思源黑体
     r'C:\Windows\Fonts\msyh.ttc',  # 微软雅黑
@@ -101,7 +101,7 @@ def export_pics(file,
                 overwrite: bool = False,
                 notemark_beat: int = 20,
                 barcount_numerator: int = 0,
-                barcount_init:int = 0) -> list:
+                barcount_init: int = 0) -> list:
     '''
     将.emid或.mid文件转换成纸带八音盒设计稿
 
@@ -364,19 +364,21 @@ def export_pics(file,
                 draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi), 
                              posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
                             fill=(0, 0, 0, 255), width=2)
+                
                 '小节编号'
                 # edit Feb12,2022 by mr258876:
                 # Added bar count. 
-                barcount_beat_count += 1
-                if barcount_numerator and barcount_beat_count >= barcount_numerator:
-                    textsize = font2.getsize(str(barcount))
-                    draw0.text(
-                        xy=posconvert(
-                            (startpos[0] + 70*j + 3 + 2*29,
-                             startpos[1] + 8*k), ppi),
-                        text=str(barcount), font=font1, fill=(0, 0, 0, 255))
-                    barcount += 1
-                    barcount_beat_count = 0
+                if barcount_numerator:
+                    barcount_beat_count += 1
+                    if barcount_beat_count >= barcount_numerator:
+                        textsize = font2.getsize(str(barcount))
+                        draw0.text(
+                            xy=posconvert(
+                                (startpos[0] + 70*j + 3 + 2*29,
+                                startpos[1] + 8*k), ppi),
+                            text=str(barcount), font=font1, fill=(0, 0, 0, 255))
+                        barcount += 1
+                        barcount_beat_count = 0
                 
                 '音符标记'
                 # edit Feb12,2022 by mr258876:
