@@ -51,6 +51,7 @@ PAPER_INFO = {A4_VERTICAL: {'size': (210, 297), 'col': 3, 'row': 35},
               B4_HORIZONAL: {'size': (353, 250), 'col': 5, 'row': 29}}
 
 FONT_PATH = [
+    r'C:\Windows\Fonts\Deng.ttf'
     'C:\\Users\\' + os.getlogin() +
     r'\AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf',  # 思源黑体
     r'C:\Windows\Fonts\msyh.ttc',  # 微软雅黑
@@ -97,7 +98,10 @@ def export_pics(file,
                 ppi: float = DEFAULT_PPI,
                 background=(255, 255, 255, 255),
                 save_pic: bool = True,
-                overwrite: bool = False) -> list:
+                overwrite: bool = False,
+                notemark_beat: int = 20,
+                barcount_numerator: int = 0,
+                barcount_init: int = 0) -> list:
     '''
     将.emid或.mid文件转换成纸带八音盒设计稿
 
@@ -138,7 +142,10 @@ def export_pics(file,
     参数 save_pic: True 或 False，是否将图片写入磁盘，默认为True
     参数 overwrite: True 或 False，是否允许覆盖同名文件，默认为False，
                     警告：设置为True可能导致原有文件丢失，请注意备份！
-
+    参数 notemark_beat: int, 每%d拍生成一个音符标记，默认值20
+    参数 barcount_numerator: int, 拍号分子，用于添加小节号，默认为0
+                    若为0则不添加小节号
+    参数 barcount_init: int, 小节号初始值，默认为0
     函数返回包含若干PIL.Image.Image实例的list
     '''
 
@@ -288,6 +295,9 @@ def export_pics(file,
     images1 = []
     draws0 = []
     draws1 = []
+    barcount = barcount_init
+    barcount_beat_count = 999
+    notemark_beat_count = int(notemark_beat/2)
     for i in range(pages):
         image0 = PIL.Image.new('RGBA', posconvert(size, ppi), (0, 0, 0, 0))
         image1 = PIL.Image.new('RGBA', posconvert(
@@ -337,19 +347,54 @@ def export_pics(file,
         '画格子'
         for j in range(col if i < pages - 1 else cols):
             '半拍横线'
+            # edit Feb12,2022 by mr258876:
+            # Optimized half-beat line, which looks closer to a real tape. 
             for k in range(row):
-                draw0.line(posconvert((startpos[0] + 70*j + 6,
-                                       startpos[1] + 8*k + 4), ppi) +
-                           posconvert((startpos[0] + 70*j + 6 + 2*29,
-                                       startpos[1] + 8*k + 4), ppi),
-                           fill=(0, 0, 0, 128), width=1)
+                draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k + 4), ppi),
+                             posconvert((startpos[0] + 70*j + 6 + 2*1.5, startpos[1] + 8*k + 4), ppi)],
+                            fill=(0, 0, 0, 255), width=1)
+                for m in range(1, 11):
+                    draw0.line([posconvert((startpos[0] + 70*j + 6 + 2*2.75*m - 1, startpos[1] + 8*k + 4), ppi),
+                                posconvert((startpos[0] + 70*j + 6 + 2*2.75*m + 3, startpos[1] + 8*k + 4), ppi)],
+                                fill=(0, 0, 0, 255), width=1)
             '整拍横线'
+            # edit Feb12,2022 by mr258876:
+            # Bolded beat line. 
             for k in range(row + 1):
-                draw0.line(posconvert((startpos[0] + 70*j + 6,
-                                       startpos[1] + 8*k), ppi) +
-                           posconvert((startpos[0] + 70*j + 6 + 2*29,
-                                       startpos[1] + 8*k), ppi),
-                           fill=(0, 0, 0, 255), width=1)
+                draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi), 
+                             posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
+                            fill=(0, 0, 0, 255), width=2)
+                
+                '小节编号'
+                # edit Feb12,2022 by mr258876:
+                # Added bar count. 
+                if barcount_numerator:
+                    barcount_beat_count += 1
+                    if barcount_beat_count >= barcount_numerator:
+                        textsize = font2.getsize(str(barcount))
+                        draw0.text(
+                            xy=posconvert(
+                                (startpos[0] + 70*j + 3 + 2*29,
+                                startpos[1] + 8*k), ppi),
+                            text=str(barcount), font=font1, fill=(0, 0, 0, 255))
+                        barcount += 1
+                        barcount_beat_count = 0
+                
+                '音符标记'
+                # edit Feb12,2022 by mr258876:
+                # Added note marks. 
+                if notemark_beat:
+                    notemark_beat_count += 1
+                    if notemark_beat_count >= 20:
+                        notes_str = ["C", "D", "G", "A", "B", "C", "D", "E", "F", "#F", "G", "#G", "A",
+                                     "#A", "B", "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B", "C", "D", "E"]
+                        for m in range(30):
+                            draw0.text(
+                                xy=posconvert(
+                                    (startpos[0] + 70*j + 3 + 2*1 - 0.25+2*m-0.75*(len(notes_str[m])-1),
+                                     startpos[1] + 8*k-4 + 4-4*(m % 2)), ppi),
+                                text=notes_str[m], font=font1, fill=(0, 0, 0, 255))
+                        notemark_beat_count = 0
             '竖线'
             for k in range(30):
                 draw0.line(posconvert((startpos[0] + 70*j + 6 + 2*k,
