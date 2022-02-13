@@ -52,12 +52,12 @@ class EmidTrack(list):
             self.length = time
 
     def is_empty(self) -> bool:
-        return self == []
+        return len(self) == 0
 
     def _update_length(self) -> int:
-        for note in self:
-            if note[1] > self.length:
-                self.length = note[1]
+        for pitch, time in self:
+            if time > self.length:
+                self.length = time
         return self.length
 
 

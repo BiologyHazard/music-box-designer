@@ -1,14 +1,10 @@
 '''
 用于从.emid和.mid文件生成纸带八音盒设计稿
-
 作者：bilibili@Bio-Hazard
     QQ3482991796
     QQ群586134350
-
 FairyMusicBox系列软件作者：bilibili@调皮的码农
-
 祝使用愉快！
-
 *错误处理尚不完善，由于使用本程序导致的问题，作者概不负责
 *使用前请务必了解可能造成的后果
 *请备份重要文件！
@@ -26,6 +22,8 @@ PITCH_TO_MBNUM = {93: 29, 91: 28, 89: 27, 88: 26, 87: 25, 86: 24, 85: 23, 84: 22
                   83: 21, 82: 20, 81: 19, 80: 18, 79: 17, 78: 16, 77: 15, 76: 14,
                   75: 13, 74: 12, 73: 11, 72: 10, 71: 9, 70: 8, 69: 7, 67: 6,
                   65: 5, 64: 4, 62: 3, 60: 2, 55: 1, 53: 0}
+NOTES_STR = ["C", "D", "G", "A", "B", "C", "D", "E", "F", "#F", "G", "#G", "A", "#A", "B",
+             "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B", "C", "D", "E"]
 
 LEFT_ALIGN = 0
 CENTER_ALIGN = 1
@@ -51,7 +49,7 @@ PAPER_INFO = {A4_VERTICAL: {'size': (210, 297), 'col': 3, 'row': 35},
               B4_HORIZONAL: {'size': (353, 250), 'col': 5, 'row': 29}}
 
 FONT_PATH = [
-    r'C:\Windows\Fonts\Deng.ttf'
+    r'C:\Windows\Fonts\Deng.ttf'  # 等线
     'C:\\Users\\' + os.getlogin() +
     r'\AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf',  # 思源黑体
     r'C:\Windows\Fonts\msyh.ttc',  # 微软雅黑
@@ -63,7 +61,7 @@ INCH_TO_MM = 25.4  # 1英寸=25.4毫米
 
 DOT_R = 1.14  # 圆点半径（单位毫米）
 BORDER = 3.0  # 边框宽度（单位毫米）
-ANTI_ALIAS = 1  # 抗锯齿缩放倍数
+ANTI_ALIAS = 1  # 抗锯齿缩放倍数（设置为1以关闭抗锯齿）
 
 
 def _find_latest_event(l, t):
@@ -99,53 +97,60 @@ def export_pics(file,
                 background=(255, 255, 255, 255),
                 save_pic: bool = True,
                 overwrite: bool = False,
-                notemark_beat: int = 20,
-                barcount_numerator: int = 0,
-                barcount_init: int = 0) -> list:
+                notemark_beat: int = None,
+                barcount_numerator: int = None,
+                barcount_startfrom: int = 0) -> list:
     '''
     将.emid或.mid文件转换成纸带八音盒设计稿
-
     参数 file: emid.EmidFile实例 或 mido.MidiFile实例 或 用字符串表示的文件路径
     参数 filename: 输出图片文件名的格式化字符串，
-                    例如：'MusicName_%d.png'
-                    留空则取参数file的文件名+'_%d.png'
-    参数 musicname: 每栏右上角的信息，留空则取参数file的文件名
+                   例如：'MusicName_第%d页.png'
+                   留空则取参数file的文件名 + '_%d.png'
+    参数 musicname: 每栏右上角的信息，留空则取参数file的文件名（不含扩展名）
     参数 transposition: 转调，表示升高的半音数，默认为0（不转调）
     参数 interpret_bpm: 设定此参数会使得note圆点的纵向间隔随着midi的bpm的变化而变化，
                         note圆点间隔的缩放倍数 = interpret_bpm / midi的bpm，
                         例如，midi的bpm被设定为75，interpret_bpm设定为100，
                         则note圆点的间隔拉伸为4/3倍，
                         设置为None则忽略midi的bpm信息，固定1拍=8毫米间隔，
+                        该参数仅对midi生效，emid会自动忽略此参数，
                         默认为None
     参数 scale: 音符位置的缩放量，大于1则拉伸纸带长度，默认为1（不缩放）
-    参数 heading: 一个元组，
-                heading[0]: 页眉文字字符串，
-                heading[1]: exportpics.LEFT_ALIGN 或
-                            exportpics.CENTER_ALIGN 或
-                            exportpics.RIGHT_ALIGN，指定对齐方式
+    参数 heading: 一个二元元组，
+                  heading[0]: 页眉文字字符串，
+                  heading[1]: exportpics.LEFT_ALIGN（左对齐）或
+                              exportpics.CENTER_ALIGN（居中对齐）或
+                              exportpics.RIGHT_ALIGN（右对齐），
+                              用以指定对齐方式，
+                  默认为('', exportpics.CENTER_ALIGN)
     参数 font: 用字符串表示的字体文件路径，
-                留空则从FONT_PATH中按序取用
-    参数 papersize: 字符串或字典
-                可以使用PAPER_INFO中的预设值(例如exportpics.A4_VERTICAL)，
-                也可以使用字典来自定义，格式为
-                {'size': 一个元组(宽, 高)，单位毫米,
-                 'col': 一页的分栏数,
-                 'row': 一栏的行数}
-                也可以使用exportpics.AUTO_SIZE自适应大小
-                默认为exportpics.A4_VERTICAL，
-    参数 ppi: 输出图片的分辨率，单位像素/英寸，默认为DEFALT_PPI
+               留空则从FONT_PATH中按序取用
+    参数 papersize: 可以使用PAPER_INFO中的预设值（例如exportpics.A4_VERTICAL），
+                    也可以使用字典来自定义，格式为
+                    { 'size': 一个元组(宽, 高)，单位毫米,
+                      'col' : 一页的分栏数,
+                      'row' : 一栏的行数（一行为8毫米） }
+                    也可以使用exportpics.AUTO_SIZE自适应大小，
+                    默认为exportpics.A4_VERTICAL（竖版A4）
+    参数 ppi: 输出图片的分辨率，单位像素/英寸，默认为exportpics.DEFALT_PPI
     参数 background: 背景图片或颜色，
-                    可以是用字符串表示的文件路径，
-                    也可以是PIL.Image.Image实例，
-                    也可以是一个表示颜色的(R, G, B, Alpha)元组，
-                    默认为(255, 255, 255, 255)，表示白色
+                     可以是用字符串表示的文件路径，
+                     也可以是PIL.Image.Image实例，
+                     也可以是一个表示颜色的(R, G, B, Alpha)元组，
+                     默认为(255, 255, 255, 255)，表示白色
     参数 save_pic: True 或 False，是否将图片写入磁盘，默认为True
     参数 overwrite: True 或 False，是否允许覆盖同名文件，默认为False，
                     警告：设置为True可能导致原有文件丢失，请注意备份！
-    参数 notemark_beat: int, 每%d拍生成一个音符标记，默认值20
-    参数 barcount_numerator: int, 拍号分子，用于添加小节号，默认为0
-                    若为0则不添加小节号
-    参数 barcount_init: int, 小节号初始值，默认为0
+    参数 notemark_beat: 可以是一个正整数，表示添加音高标记的间隔（单位为拍），
+                        也可以是None，不添加音高标记，
+                        默认为None
+    参数 barcount_numerator: 可以是一个正整数，表示添加小节号标记的间隔（单位为拍），
+                             一般来说设置为每小节的拍数
+                             也可以是None，不添加小节号标记，
+                             默认为None
+    参数 barcount_startfrom: 小节号初始值，默认为0，
+                             参数barcount_numerator为None时自动忽略
+
     函数返回包含若干PIL.Image.Image实例的list
     '''
 
@@ -166,10 +171,7 @@ def export_pics(file,
         '处理midi文件'
         ticks_per_beat = midifile.ticks_per_beat
         notes = []
-        prev_time = {93: -8, 91: -8, 89: -8, 88: -8, 87: -8, 86: -8, 85: -8, 84: -8,
-                     83: -8, 82: -8, 81: -8, 80: -8, 79: -8, 78: -8, 77: -8, 76: -8,
-                     75: -8, 74: -8, 73: -8, 72: -8, 71: -8, 70: -8, 69: -8, 67: -8,
-                     65: -8, 64: -8, 62: -8, 60: -8, 55: -8, 53: -8}
+        prev_time = {pitch: -8 for pitch, mbnum in PITCH_TO_MBNUM.items()}
 
         if interpret_bpm is not None:
             tempo_events = []
@@ -250,15 +252,15 @@ def export_pics(file,
             notes, length = process_midifile(file)
 
     else:
-        raise(ValueError(
-            'Unknown file type (filename, emid.EmidFile or mido.MidiFile required)'))
+        raise ValueError(
+            'Unknown file type (filename, emid.EmidFile or mido.MidiFile required)')
 
     if papersize == AUTO_SIZE:  # 计算纸张大小
         col = 1
         row = math.floor(length / 8) + 1
         size = (70, row * 8 + 20)
         pages = 1
-        cols = 1
+        lastpage_cols = 1
     else:
         if type(papersize) == int:
             papersize = PAPER_INFO[papersize]
@@ -267,7 +269,7 @@ def export_pics(file,
         size = papersize['size']
         pages = math.floor(length / (col * row * 8)) + 1  # 计算页数
         # 计算最后一页的栏数
-        cols = math.floor(length / (row * 8)) - (pages - 1) * col + 1
+        lastpage_cols = math.floor(length / (row * 8)) - (pages - 1) * col + 1
 
     contentsize = (70 * col, 8 * row)
     startpos = (size[0] / 2 - contentsize[0] / 2,
@@ -278,26 +280,30 @@ def export_pics(file,
     if font is None:  # 在FONT_PATH中寻找第一个能使用的字体
         for i in FONT_PATH:
             try:
+                # font0 标题文字
                 font0 = PIL.ImageFont.truetype(i, round(mm2pixel(4, ppi)))
+                # font1 栏尾页码和音高标记
                 font1 = PIL.ImageFont.truetype(i, round(mm2pixel(3.4, ppi)))
+                # font2 栏右上角文字和页码
                 font2 = PIL.ImageFont.truetype(i, round(mm2pixel(6, ppi)))
             except:
                 pass
             else:
                 break
-    else:
+    else:  # 用户指定字体
         font0 = PIL.ImageFont.truetype(font, round(mm2pixel(4, ppi)))
         font1 = PIL.ImageFont.truetype(font, round(mm2pixel(3.4, ppi)))
         font2 = PIL.ImageFont.truetype(font, round(mm2pixel(6, ppi)))
 
     print('Drawing...')
-    images0 = []
-    images1 = []
+    images0 = []  # 网格、标题、栏文字、页码，不做抗锯齿处理
+    images1 = []  # note圆点，做抗锯齿处理
     draws0 = []
     draws1 = []
-    barcount = barcount_init
+    barcount = barcount_startfrom
     barcount_beat_count = 999
-    notemark_beat_count = int(notemark_beat/2)
+    if notemark_beat:
+        notemark_beat_count = math.floor(notemark_beat / 2)
     for i in range(pages):
         image0 = PIL.Image.new('RGBA', posconvert(size, ppi), (0, 0, 0, 0))
         image1 = PIL.Image.new('RGBA', posconvert(
@@ -305,7 +311,7 @@ def export_pics(file,
         draw0 = PIL.ImageDraw.Draw(image0)
         draw1 = PIL.ImageDraw.Draw(image1)
         '写字'
-        for j in range(col if i < pages - 1 else cols):
+        for j in range(col if i < pages - 1 else lastpage_cols):
             '标题文字'
             headingtext, align = heading
             textsize = font0.getsize(headingtext)
@@ -333,9 +339,8 @@ def export_pics(file,
             for k, char in enumerate(musicname):
                 textsize = font2.getsize(char)
                 draw0.text(
-                    xy=posconvert(
-                        (startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
-                         startpos[1] + 8*k + 7 - pixel2mm(textsize[1], ppi)), ppi),
+                    xy=posconvert((startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
+                                   startpos[1] + 8*k + 7 - pixel2mm(textsize[1], ppi)), ppi),
                     text=char, font=font2, fill=(0, 0, 0, 128))
             '栏右上角页码'
             textsize = font2.getsize(str(colnum))
@@ -345,29 +350,29 @@ def export_pics(file,
                      startpos[1] + 8*len(musicname) + 7 - pixel2mm(textsize[1], ppi)), ppi),
                 text=str(colnum), font=font2, fill=(0, 0, 0, 128))
         '画格子'
-        for j in range(col if i < pages - 1 else cols):
+        for j in range(col if i < pages - 1 else lastpage_cols):
             '半拍横线'
             # edit Feb12,2022 by mr258876:
-            # Optimized half-beat line, which looks closer to a real tape. 
+            # Optimized half-beat line, which looks closer to a real tape.
             for k in range(row):
                 draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k + 4), ppi),
-                             posconvert((startpos[0] + 70*j + 6 + 2*1.5, startpos[1] + 8*k + 4), ppi)],
-                            fill=(0, 0, 0, 255), width=1)
+                            posconvert((startpos[0] + 70*j + 6 + 2*1.5, startpos[1] + 8*k + 4), ppi)],
+                           fill=(0, 0, 0, 255), width=1)
                 for m in range(1, 11):
                     draw0.line([posconvert((startpos[0] + 70*j + 6 + 2*2.75*m - 1, startpos[1] + 8*k + 4), ppi),
                                 posconvert((startpos[0] + 70*j + 6 + 2*2.75*m + 3, startpos[1] + 8*k + 4), ppi)],
-                                fill=(0, 0, 0, 255), width=1)
+                               fill=(0, 0, 0, 255), width=1)
             '整拍横线'
             # edit Feb12,2022 by mr258876:
-            # Bolded beat line. 
+            # Bolded beat line.
             for k in range(row + 1):
-                draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi), 
-                             posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
-                            fill=(0, 0, 0, 255), width=2)
-                
+                draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi),
+                            posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
+                           fill=(0, 0, 0, 255), width=2)
+
                 '小节编号'
                 # edit Feb12,2022 by mr258876:
-                # Added bar count. 
+                # Added bar count.
                 if barcount_numerator:
                     barcount_beat_count += 1
                     if barcount_beat_count >= barcount_numerator:
@@ -375,25 +380,23 @@ def export_pics(file,
                         draw0.text(
                             xy=posconvert(
                                 (startpos[0] + 70*j + 3 + 2*29,
-                                startpos[1] + 8*k), ppi),
+                                 startpos[1] + 8*k), ppi),
                             text=str(barcount), font=font1, fill=(0, 0, 0, 255))
                         barcount += 1
                         barcount_beat_count = 0
-                
-                '音符标记'
+
+                '音高标记'
                 # edit Feb12,2022 by mr258876:
-                # Added note marks. 
+                # Added note marks.
                 if notemark_beat:
                     notemark_beat_count += 1
                     if notemark_beat_count >= 20:
-                        notes_str = ["C", "D", "G", "A", "B", "C", "D", "E", "F", "#F", "G", "#G", "A",
-                                     "#A", "B", "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B", "C", "D", "E"]
                         for m in range(30):
                             draw0.text(
                                 xy=posconvert(
-                                    (startpos[0] + 70*j + 3 + 2*1 - 0.25+2*m-0.75*(len(notes_str[m])-1),
+                                    (startpos[0] + 70*j + 3 + 2*1 - 0.25+2*m-0.75*(len(NOTES_STR[m])-1),
                                      startpos[1] + 8*k-4 + 4-4*(m % 2)), ppi),
-                                text=notes_str[m], font=font1, fill=(0, 0, 0, 255))
+                                text=NOTES_STR[m], font=font1, fill=(0, 0, 0, 255))
                         notemark_beat_count = 0
             '竖线'
             for k in range(30):
@@ -403,7 +406,7 @@ def export_pics(file,
                                        endpos[1]), ppi),
                            fill=(0, 0, 0, 255), width=1)
         '分隔线'
-        for j in range(col + 1 if i < pages - 1 else cols + 1):
+        for j in range(col + 1 if i < pages - 1 else lastpage_cols + 1):
             draw0.line(posconvert((startpos[0] + 70*j,
                                    startpos[1]), ppi) +
                        posconvert((startpos[0] + 70*j,
@@ -478,7 +481,7 @@ def batch_export_pics(path=None,
                       overwrite=False,
                       font=None):
     '''
-    批量将path目录下的所有.mid和.emid文件转换为纸带设计稿图片
+    批量将path目录下的所有.mid和.emid文件转换为纸带设计稿图片，
     如果path参数留空，则取当前工作目录
     '''
     if path is None:
