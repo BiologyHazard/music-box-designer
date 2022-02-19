@@ -479,7 +479,8 @@ def batch_export_pics(path=None,
                       ppi=DEFAULT_PPI,
                       background=(255, 255, 255, 255),
                       overwrite=False,
-                      font=None):
+                      font=None,
+                      notemark_beat=None):
     '''
     批量将path目录下的所有.mid和.emid文件转换为纸带设计稿图片，
     如果path参数留空，则取当前工作目录
@@ -495,7 +496,8 @@ def batch_export_pics(path=None,
                         ppi=ppi,
                         background=background,
                         overwrite=overwrite,
-                        font=font)
+                        font=font,
+                        notemark_beat=notemark_beat)
 
 
 if __name__ == '__main__':
