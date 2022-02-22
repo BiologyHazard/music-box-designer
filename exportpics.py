@@ -209,7 +209,7 @@ def export_pics(file,
                                 beat = realtime / 60 * interpret_bpm  # 计算beat
 
                             time = beat * 8 * scale
-                            if time - prev_time[pitch] >= 8:
+                            if time - prev_time[pitch] >= 8 - 1e-3:
                                 prev_time[pitch] = time
                                 notes.append([PITCH_TO_MBNUM[pitch],
                                               time])  # 添加note
@@ -352,7 +352,7 @@ def export_pics(file,
         '画格子'
         for j in range(col if i < pages - 1 else lastpage_cols):
             '半拍横线'
-            # edit Feb12,2022 by mr258876:
+            '''# edit Feb12,2022 by mr258876:
             # Optimized half-beat line, which looks closer to a real tape.
             for k in range(row):
                 draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k + 4), ppi),
@@ -361,14 +361,18 @@ def export_pics(file,
                 for m in range(1, 11):
                     draw0.line([posconvert((startpos[0] + 70*j + 6 + 2*2.75*m - 1, startpos[1] + 8*k + 4), ppi),
                                 posconvert((startpos[0] + 70*j + 6 + 2*2.75*m + 3, startpos[1] + 8*k + 4), ppi)],
-                               fill=(0, 0, 0, 255), width=1)
+                               fill=(0, 0, 0, 255), width=1)'''
+            for k in range(row):
+                draw0.line(posconvert((startpos[0] + 70*j + 6,
+                                       startpos[1] + 8*k + 4), ppi) +
+                           posconvert((startpos[0] + 70*j + 6 + 2*29,
+                                       startpos[1] + 8*k + 4), ppi),
+                           fill=(0, 0, 0, 128), width=1)
             '整拍横线'
-            # edit Feb12,2022 by mr258876:
-            # Bolded beat line.
             for k in range(row + 1):
                 draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi),
                             posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
-                           fill=(0, 0, 0, 255), width=2)
+                           fill=(0, 0, 0, 255), width=1)
 
                 '小节编号'
                 # edit Feb12,2022 by mr258876:
