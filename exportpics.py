@@ -61,45 +61,49 @@ INCH_TO_MM = 25.4  # 1英寸=25.4毫米
 
 DOT_R = 1.14  # 圆点半径（单位毫米）
 BORDER = 3.0  # 边框宽度（单位毫米）
-ANTI_ALIAS = 1  # 抗锯齿缩放倍数（设置为1以关闭抗锯齿）
+ANTI_ALIAS = 1.0  # 抗锯齿缩放倍数（设置为1以关闭抗锯齿）
+
+Number = float | int
 
 
-def _find_latest_event(l, t):
+def _find_latest_event(l: list[tuple[int, int]], t: int) -> int:
     i = len(l) - 1
     while l[i][1] > t:
         i -= 1
     return i
 
 
-def mm2pixel(x, ppi=DEFAULT_PPI):
+def mm2pixel(x: Number, ppi: Number = DEFAULT_PPI) -> Number:
     return x / INCH_TO_MM * ppi
 
 
-def pixel2mm(x, ppi=DEFAULT_PPI):
+def pixel2mm(x: Number, ppi: Number = DEFAULT_PPI) -> Number:
     return x * INCH_TO_MM / ppi
 
 
-def posconvert(pos, ppi=DEFAULT_PPI):
+def posconvert(pos: tuple[Number, Number], ppi: Number = DEFAULT_PPI):
     x, y = pos
     return (round(mm2pixel(x, ppi) - 0.5), round(mm2pixel(y, ppi) - 0.5))
 
 
 def export_pics(file,
-                filename: str = None,
-                musicname: str = None,
+                filename: str | None = None,
+                musicname: str | None = None,
                 transposition: int = 0,
-                interpret_bpm: float = None,
-                scale: float = 1.0,
-                heading: tuple = ('', CENTER_ALIGN),
-                font: str = None,
-                papersize=A4_VERTICAL,
-                ppi: float = DEFAULT_PPI,
-                background=(255, 255, 255, 255),
+                interpret_bpm: Number | None = None,
+                scale: Number = 1.0,
+                heading: tuple[str, int] = ('', CENTER_ALIGN),
+                font: str | None = None,
+                papersize: int | dict = A4_VERTICAL,
+                ppi: Number = DEFAULT_PPI,
+                background: str | PIL.Image.Image | tuple[int, int, int, int] = (
+                    255, 255, 255, 255),
                 save_pic: bool = True,
                 overwrite: bool = False,
-                notemark_beat: int = None,
-                barcount_numerator: int = None,
-                barcount_startfrom: int = 0) -> list:
+                notemark_beat: int | None = None,
+                barcount_numerator: int | None = None,
+                barcount_startfrom: int = 0
+                ) -> list[PIL.Image.Image]:
     '''
     将.emid或.mid文件转换成纸带八音盒设计稿
     参数 file: emid.EmidFile实例 或 mido.MidiFile实例 或 用字符串表示的文件路径
@@ -154,7 +158,7 @@ def export_pics(file,
     函数返回包含若干PIL.Image.Image实例的list
     '''
 
-    def process_emidfile(emidfile, transposition=transposition):
+    def process_emidfile(emidfile: emid.EmidFile, transposition: int = transposition):
         '处理emid文件'
         notes = []
         for track in emidfile.tracks:
@@ -167,7 +171,7 @@ def export_pics(file,
         length = notes[-1][1]
         return notes, length
 
-    def process_midifile(midifile, transposition=transposition):
+    def process_midifile(midifile: mido.MidiFile, transposition: int = transposition):
         '处理midi文件'
         ticks_per_beat = midifile.ticks_per_beat
         notes = []
@@ -225,8 +229,7 @@ def export_pics(file,
 
     print('Processing Data...')
     '打开文件以及处理默认值'
-    typ = type(file)
-    if typ == str:
+    if isinstance(file, str):
         if filename is None:
             filename = os.path.splitext(file)[0] + '_%d.png'
         if musicname is None:
@@ -238,21 +241,23 @@ def export_pics(file,
         elif extention == '.mid':
             notes, length = process_midifile(mido.MidiFile(file))
         else:
-            raise(ValueError('Unknown file extention (\'.mid\' or \'.emid\' required)'))
+            raise ValueError(
+                'Unknown file extention (\'.mid\' or \'.emid\' required)')
 
-    elif typ == emid.EmidFile or mido.MidiFile:
+    elif isinstance(file, emid.EmidFile) or isinstance(file, mido.MidiFile):
         if filename is None:
             filename = os.path.splitext(file.filename)[0] + '_%d.png'
         if musicname is None:
-            musicname = os.path.splitext(os.path.split(file)[1])[0]
+            musicname = os.path.splitext(os.path.split(file.filename)[1])[0]
+            # TODO: This line may have bugs.
 
-        if typ == emid.EmidFile:
+        if isinstance(file, emid.EmidFile):
             notes, length = process_emidfile(file)
         else:
             notes, length = process_midifile(file)
 
     else:
-        raise ValueError(
+        raise TypeError(
             'Unknown file type (filename, emid.EmidFile or mido.MidiFile required)')
 
     if papersize == AUTO_SIZE:  # 计算纸张大小
@@ -262,7 +267,7 @@ def export_pics(file,
         pages = 1
         lastpage_cols = 1
     else:
-        if type(papersize) == int:
+        if isinstance(papersize, int):
             papersize = PAPER_INFO[papersize]
         col = papersize['col']
         row = papersize['row']
@@ -454,14 +459,17 @@ def export_pics(file,
                        posconvert((size[0], size[1]), ppi),
                        fill=(255, 255, 255, 0))
     '处理background'
-    if type(background) == str:
+    if isinstance(background, str):
         bgimage = PIL.Image.open(background).resize(
             (posconvert(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
-    elif type(background) == PIL.Image.Image:
+    elif isinstance(background, PIL.Image.Image):
         bgimage = background.resize(
             (posconvert(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
-    elif type(background) == tuple:
+    elif isinstance(background, tuple):
         bgimage = PIL.Image.new('RGBA', posconvert(size, ppi), background)
+    else:
+        raise TypeError
+
     '导出图片'
     result = []
     for pagenum, image in enumerate(images0):
@@ -478,13 +486,14 @@ def export_pics(file,
     return result
 
 
-def batch_export_pics(path=None,
-                      papersize=A4_VERTICAL,
-                      ppi=DEFAULT_PPI,
-                      background=(255, 255, 255, 255),
-                      overwrite=False,
-                      font=None,
-                      notemark_beat=None):
+def batch_export_pics(path: str | None = None,
+                      papersize: int | dict = A4_VERTICAL,
+                      ppi: Number = DEFAULT_PPI,
+                      background: str | PIL.Image.Image | tuple[int, int, int, int] = (
+                          255, 255, 255, 255),
+                      overwrite: bool = False,
+                      font: str | None = None,
+                      notemark_beat: int | None = None):
     '''
     批量将path目录下的所有.mid和.emid文件转换为纸带设计稿图片，
     如果path参数留空，则取当前工作目录

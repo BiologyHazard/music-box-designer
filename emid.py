@@ -14,7 +14,7 @@ FairyMusicBox系列软件作者：bilibili@调皮的码农
 *请备份重要文件！
 '''
 
-import os.path
+import os
 import math
 import mido
 
@@ -32,16 +32,16 @@ MBNUM_TO_PITCH = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 6, 84: 7, 83: 8,
                   64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
 
 
-def pitch2MBnum(pitch):
+def pitch2MBnum(pitch: int):
     return MBNUM_TO_PITCH[pitch]
 
 
-def MBnum2pitch(MBnum):
+def MBnum2pitch(MBnum: int):
     return PITCH_TO_MBNUM[MBnum]
 
 
 class EmidTrack(list):
-    def __init__(self, name: str):
+    def __init__(self, name: str = '') -> None:
         self.name = name
         self.length = 0
 
@@ -65,14 +65,15 @@ class EmidFile:
     '带有bpm信息，但是保存为emid文件时会丢失'
 
     def __init__(self, file=None, bpm: float = DEFAULT_BPM):
-        self.tracks = []
+        self.tracks: list[EmidTrack] = []
         self.length = 0
         self.bpm = bpm
+        self.filename = ''
 
-        if type(file) == str:
+        if isinstance(file, str):
             with open(file, 'r', encoding='utf-8') as file:
                 self._load(file)
-        else:
+        elif file is not None:
             self._load(file)
 
     def _load(self, file) -> None:
@@ -108,12 +109,13 @@ class EmidFile:
         self.tracks = [track for track in self.tracks if not track.is_empty()]
 
     def save(self,
-             filename=None,
+             filename: str | None = None,
              file=None,
              overwrite: bool = False,
-             delemptytracks: bool = True) -> None:
+             del_empty_tracks: bool = True) -> None:
         '注意：overwrite设置为True可能会覆盖现有文件！'
-        if delemptytracks:
+
+        if del_empty_tracks:
             self.del_empty_tracks()
         if file is not None:
             self._save(file)
@@ -143,7 +145,7 @@ class EmidFile:
         file.write(','.join(tracknamelist))
 
     def export_Midi(self,
-                    filename=None,
+                    filename: str | None = None,
                     file=None,
                     overwrite: bool = False,
                     transposition: int = 0,
@@ -232,21 +234,21 @@ def import_Midi(file, transposition: int = 0) -> EmidFile:
     return emidfile
 
 
-def midi2emid(midifilename, emidfilename=None):
+def midi2emid(midifilename, emidfilename: str | None = None):
     '快速将.mid文件转换为.emid文件'
     if emidfilename is None:
         emidfilename = os.path.splitext(midifilename)[0] + '.emid'
     import_Midi(midifilename).save(emidfilename)
 
 
-def emid2midi(emidfilename, midifilename=None):
+def emid2midi(emidfilename, midifilename: str | None = None):
     '快速将.emid文件转换为.mid文件'
     if midifilename is None:
         midifilename = os.path.splitext(emidfilename)[0] + '.mid'
     EmidFile(emidfilename).export_Midi(midifilename)
 
 
-def find_available_filename(path):
+def find_available_filename(path: str) -> str:
     name, extension = os.path.splitext(path)
     if os.path.exists(name + extension):
         i = 1
@@ -257,7 +259,7 @@ def find_available_filename(path):
         return name + extension
 
 
-def batch_conv_midi2emid(path=None):
+def batch_conv_midi2emid(path: str | None = None):
     '''
     批量将path目录下的所有.mid文件转换为.emid文件
     如果path参数留空，则取当前工作目录
@@ -270,7 +272,7 @@ def batch_conv_midi2emid(path=None):
             midi2emid(filename, name + '.emid')
 
 
-def batch_conv_emid2midi(path=None):
+def batch_conv_emid2midi(path: str | None = None):
     '''
     批量将path目录下的所有.emid文件转换为.mid文件
     如果path参数留空，则取当前工作目录
