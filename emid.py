@@ -45,6 +45,9 @@ class EmidTrack(list):
         self.name = name
         self.length = 0
 
+    def __repr__(self) -> str:
+        return f'EmidTrack(name={repr(self.name)}, notes={super().__repr__()})'
+
     def add_note(self, pitch: int, time: int) -> None:
         'note的pitch使用midi音高而非八音盒序号存储'
         self.append([pitch, time])
