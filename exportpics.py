@@ -9,14 +9,16 @@ FairyMusicBox系列软件作者：bilibili@调皮的码农
 *使用前请务必了解可能造成的后果
 *请备份重要文件！
 '''
-import os
 import math
+import os
+from operator import itemgetter
+
+import mido
 import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont
-import mido
-import emid
 
+import emid
 
 PITCH_TO_MBNUM = {93: 29, 91: 28, 89: 27, 88: 26, 87: 25, 86: 24, 85: 23, 84: 22,
                   83: 21, 82: 20, 81: 19, 80: 18, 79: 17, 78: 16, 77: 15, 76: 14,
@@ -162,13 +164,15 @@ def export_pics(file,
         '处理emid文件'
         notes = []
         for track in emidfile.tracks:
-            for note in track:
-                pitch, time = note
+            for pitch, time in track:
                 if pitch + transposition in PITCH_TO_MBNUM:
                     notes.append(
                         [PITCH_TO_MBNUM[pitch + transposition], float(time * scale)])
-        notes.sort(key=lambda a: (a[1], a[0]))
-        length = notes[-1][1]
+        notes.sort(key=itemgetter(1, 0))
+        if notes:
+            length = notes[-1][1]
+        else:
+            length = 0
         return notes, length
 
     def process_midifile(midifile: mido.MidiFile, transposition: int = transposition):
@@ -223,8 +227,11 @@ def export_pics(file,
                         else:  # 如果超出音域
                             print(
                                 f'[WARN] Note {pitch} in bar {math.floor(miditime / ticks_per_beat / 4) + 1} is out of range')
-        notes.sort(key=lambda a: (a[1], a[0]))  # 按time排序
-        length = notes[-1][1]
+        notes.sort(key=itemgetter(1, 0))  # 按time排序
+        if notes:
+            length = notes[-1][1]
+        else:
+            length = 0
         return notes, length
 
     print('Processing Data...')
