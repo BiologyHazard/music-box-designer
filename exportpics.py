@@ -1,11 +1,15 @@
 '''
 用于从.emid和.mid文件生成纸带八音盒设计稿
+
 作者：bilibili@Bio-Hazard
-    QQ3482991796
-    QQ群586134350
++ QQ3482991796
++ QQ群586134350
+
 FairyMusicBox系列软件作者：bilibili@调皮的码农
+
 祝使用愉快！
-*错误处理尚不完善，由于使用本程序导致的问题，作者概不负责
+
+*错误处理尚不完善，由于输入的数据不合规或者本程序的bug导致的问题，作者概不负责
 *使用前请务必了解可能造成的后果
 *请备份重要文件！
 '''
@@ -93,6 +97,7 @@ def export_pics(file,
                 musicname: str | None = None,
                 transposition: int = 0,
                 interpret_bpm: Number | None = None,
+                remove_blank: bool = True,
                 scale: Number = 1.0,
                 heading: tuple[str, int] = ('', CENTER_ALIGN),
                 font: str | None = None,
@@ -121,14 +126,15 @@ def export_pics(file,
                         设置为None则忽略midi的bpm信息，固定1拍=8毫米间隔，
                         该参数仅对midi生效，emid会自动忽略此参数，
                         默认为None
+    参数 remove_blank: True 或 False，是否移除开头的空白，默认为True
     参数 scale: 音符位置的缩放量，大于1则拉伸纸带长度，默认为1（不缩放）
-    参数 heading: 一个二元元组，
+    参数 heading: 可以是一个二元元组，
                   heading[0]: 页眉文字字符串，
                   heading[1]: exportpics.LEFT_ALIGN（左对齐）或
                               exportpics.CENTER_ALIGN（居中对齐）或
                               exportpics.RIGHT_ALIGN（右对齐），
                               用以指定对齐方式，
-                  默认为('', exportpics.CENTER_ALIGN)
+                  默认为None
     参数 font: 用字符串表示的字体文件路径，
                留空则从FONT_PATH中按序取用
     参数 papersize: 可以使用PAPER_INFO中的预设值（例如exportpics.A4_VERTICAL），
@@ -160,22 +166,18 @@ def export_pics(file,
     函数返回包含若干PIL.Image.Image实例的list
     '''
 
-    def process_emidfile(emidfile: emid.EmidFile, transposition: int = transposition):
+    def process_emidfile(emidfile: emid.EmidFile):
         '处理emid文件'
         notes = []
         for track in emidfile.tracks:
             for pitch, time in track:
                 if pitch + transposition in PITCH_TO_MBNUM:
                     notes.append(
-                        [PITCH_TO_MBNUM[pitch + transposition], float(time * scale)])
+                        (PITCH_TO_MBNUM[pitch + transposition], float(time * scale)))
         notes.sort(key=itemgetter(1, 0))
-        if notes:
-            length = notes[-1][1]
-        else:
-            length = 0
-        return notes, length
+        return notes
 
-    def process_midifile(midifile: mido.MidiFile, transposition: int = transposition):
+    def process_midifile(midifile: mido.MidiFile):
         '处理midi文件'
         ticks_per_beat = midifile.ticks_per_beat
         notes = []
@@ -219,8 +221,8 @@ def export_pics(file,
                             time = beat * 8 * scale
                             if time - prev_time[pitch] >= 8 - 1e-3:
                                 prev_time[pitch] = time
-                                notes.append([PITCH_TO_MBNUM[pitch],
-                                              time])  # 添加note
+                                notes.append((PITCH_TO_MBNUM[pitch],
+                                              time))  # 添加note
                             else:  # 如果音符过近，则直接忽略该音符
                                 print(
                                     f'[WARN] Too Near! Note {pitch} in bar {math.floor(miditime / ticks_per_beat / 4) + 1}')
@@ -228,11 +230,7 @@ def export_pics(file,
                             print(
                                 f'[WARN] Note {pitch} in bar {math.floor(miditime / ticks_per_beat / 4) + 1} is out of range')
         notes.sort(key=itemgetter(1, 0))  # 按time排序
-        if notes:
-            length = notes[-1][1]
-        else:
-            length = 0
-        return notes, length
+        return notes
 
     print('Processing Data...')
     '打开文件以及处理默认值'
@@ -244,9 +242,9 @@ def export_pics(file,
 
         extention = os.path.splitext(file)[1]
         if extention == '.emid':
-            notes, length = process_emidfile(emid.EmidFile(file))
+            notes = process_emidfile(emid.EmidFile(file))
         elif extention == '.mid':
-            notes, length = process_midifile(mido.MidiFile(file))
+            notes = process_midifile(mido.MidiFile(file))
         else:
             raise ValueError(
                 'Unknown file extention (\'.mid\' or \'.emid\' required)')
@@ -259,23 +257,35 @@ def export_pics(file,
             # TODO: This line may have bugs.
 
         if isinstance(file, emid.EmidFile):
-            notes, length = process_emidfile(file)
+            notes = process_emidfile(file)
         else:
-            notes, length = process_midifile(file)
+            notes = process_midifile(file)
 
     else:
         raise TypeError(
             'Unknown file type (filename, emid.EmidFile or mido.MidiFile required)')
+    # 计算长度
+    if notes:
+        if remove_blank:
+            first_note_beat = math.floor(notes[0][1] / 8)
+        notes = [(pitch, time - first_note_beat * 8)
+                 for pitch, time in notes]  # 移除开头的空白
+        length = notes[-1][1]
+    else:
+        length = 0
 
     if papersize == AUTO_SIZE:  # 计算纸张大小
         col = 1
         row = math.floor(length / 8) + 1
-        size = (70, row * 8 + 20)
+        size = (70, 8 * row + 20)
         pages = 1
         lastpage_cols = 1
     else:
         if isinstance(papersize, int):
-            papersize = PAPER_INFO[papersize]
+            if papersize in PAPER_INFO:
+                papersize = PAPER_INFO[papersize]
+            else:
+                raise ValueError
         col = papersize['col']
         row = papersize['row']
         size = papersize['size']
@@ -283,11 +293,11 @@ def export_pics(file,
         # 计算最后一页的栏数
         lastpage_cols = math.floor(length / (row * 8)) - (pages - 1) * col + 1
 
-    contentsize = (70 * col, 8 * row)
-    startpos = (size[0] / 2 - contentsize[0] / 2,
-                size[1] / 2 - contentsize[1] / 2)
-    endpos = (size[0] / 2 + contentsize[0] / 2,
-              size[1] / 2 + contentsize[1] / 2)  # 计算坐标
+    content_size = (70 * col, 8 * row)
+    startpos = (size[0] / 2 - content_size[0] / 2,
+                size[1] / 2 - content_size[1] / 2)
+    endpos = (size[0] / 2 + content_size[0] / 2,
+              size[1] / 2 + content_size[1] / 2)  # 计算坐标
 
     if font is None:  # 在FONT_PATH中寻找第一个能使用的字体
         for i in FONT_PATH:
@@ -325,22 +335,23 @@ def export_pics(file,
         '写字'
         for j in range(col if i < pages - 1 else lastpage_cols):
             '标题文字'
-            headingtext, align = heading
-            textsize = font0.getsize(headingtext)
+            if heading is not None:
+                headingtext, align = heading
+                textsize = font0.getsize(headingtext)
 
-            if align == LEFT_ALIGN:
-                posX = 7
-            elif align == CENTER_ALIGN:
-                posX = (size[0] - pixel2mm(textsize[0], ppi)) / 2
-            elif align == RIGHT_ALIGN:
-                posX = (size[0] - pixel2mm(textsize[0], ppi)) - 7
-            posY = ((size[1] - contentsize[1]) / 2 -
-                    pixel2mm(textsize[1], ppi)) - 1
+                if align == LEFT_ALIGN:
+                    posX = 7
+                elif align == CENTER_ALIGN:
+                    posX = (size[0] - pixel2mm(textsize[0], ppi)) / 2
+                elif align == RIGHT_ALIGN:
+                    posX = (size[0] - pixel2mm(textsize[0], ppi)) - 7
+                posY = ((size[1] - content_size[1]) / 2 -
+                        pixel2mm(textsize[1], ppi)) - 1
 
-            draw0.text(xy=posconvert((posX, posY), ppi),
-                       text=headingtext,
-                       font=font0,
-                       fill=(0, 0, 0, 255))
+                draw0.text(xy=posconvert((posX, posY), ppi),
+                           text=headingtext,
+                           font=font0,
+                           fill=(0, 0, 0, 255))
             '栏尾页码'
             colnum = i * col + j + 1
             draw0.text(xy=posconvert((startpos[0] + 70*j + 6, endpos[1]), ppi),

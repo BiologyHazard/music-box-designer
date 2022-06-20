@@ -14,15 +14,14 @@ FairyMusicBox系列软件作者：bilibili@调皮的码农
 *请备份重要文件！
 '''
 
-import os
 import math
-import mido
+import os
 
+import mido
 
 DEFAULT_BPM = 120.0
 TIME_PER_BEAT = 8
-DEFAULT_TICKS_PER_BEAT = 96
-'FL导出的midi默认为此值'
+DEFAULT_TICKS_PER_BEAT = 96  # FL导出的midi默认为此值
 
 PITCH_TO_MBNUM = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78,
                   77, 76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
@@ -41,15 +40,16 @@ def MBnum2pitch(MBnum: int):
 
 
 class EmidTrack(list):
-    def __init__(self, name: str = '') -> None:
-        self.name = name
+    'note的pitch使用midi音高而非八音盒序号存储'
+
+    def __init__(self, track_name: str = '') -> None:
+        self.track_name = track_name
         self.length = 0
 
     def __repr__(self) -> str:
-        return f'EmidTrack(name={repr(self.name)}, notes={super().__repr__()})'
+        return f'EmidTrack(name={repr(self.track_name)}, notes={super().__repr__()})'
 
     def add_note(self, pitch: int, time: int) -> None:
-        'note的pitch使用midi音高而非八音盒序号存储'
         self.append([pitch, time])
         if time > self.length:
             self.length = time
@@ -80,24 +80,24 @@ class EmidFile:
             self._load(file)
 
     def _load(self, file) -> None:
-        self.filename = file.name
-        emidtext = file.read()
+        self.filename: str = file.name
+        emidtext: str = file.read().strip()
         notestext, s2 = emidtext.split('&')
-        length, tracksname = s2.split('*')
+        length, tracks_name = s2.split('*')
         self.length = int(length)
-        notelist = notestext.split('#')
-        tracknamelist = tracksname.split(',')
-        tracknamedict = {k: v for v, k in enumerate(tracknamelist)}
+        note_list = notestext.split('#')
+        track_name_list = tracks_name.split(',')
+        track_name_dict = {k: v for v, k in enumerate(track_name_list)}
         '添加空轨道'
-        for trackname in tracknamelist:
-            self.tracks.append(EmidTrack(trackname))
+        for track_name in track_name_list:
+            self.tracks.append(EmidTrack(track_name))
         '添加音符'
-        for note in notelist:
-            MBnum, time, trackname = note.split(',')
+        for note in note_list:
+            MBnum, time, track_name = note.split(',')
             pitch = MBnum2pitch(int(MBnum))
             time = float(time)
-            trackidx = tracknamedict[trackname]
-            self.tracks[trackidx].add_note(pitch, time)
+            track_idx = track_name_dict[track_name]
+            self.tracks[track_idx].add_note(pitch, time)
         '更新长度'
         self._update_length()
 
@@ -136,7 +136,7 @@ class EmidFile:
                 if not firstnote:
                     file.write('#')  # 第一个音符前不需要加'#'分隔
                 file.write('%d,%d,%s' %
-                           (pitch2MBnum(pitch), time, track.name))
+                           (pitch2MBnum(pitch), time, track.track_name))
                 firstnote = False
         file.write('&')
         '计算并存储长度'
@@ -144,7 +144,7 @@ class EmidFile:
         file.write('*')
         tracknamelist = []
         for track in self.tracks:
-            tracknamelist.append(track.name)
+            tracknamelist.append(track.track_name)
         file.write(','.join(tracknamelist))
 
     def export_Midi(self,
@@ -165,6 +165,7 @@ class EmidFile:
         emptytrack = mido.MidiTrack()
         emptytrack.append(mido.MetaMessage(
             type='set_tempo', tempo=mido.bpm2tempo(self.bpm), time=0))
+        emptytrack.append(mido.MetaMessage(type='end_of_track', time=0))
         midifile.tracks.append(emptytrack)
 
         for track in self.tracks:
@@ -177,12 +178,12 @@ class EmidFile:
                 events.append(mido.Message(
                     type='note_off',
                     note=pitch + transposition,
-                    time=round(ticks_per_beat * ((time / TIME_PER_BEAT) + 1))))
+                    time=round(ticks_per_beat * (time / TIME_PER_BEAT + 1))))
             events.sort(key=lambda msg: msg.time)
 
             miditrack = mido.MidiTrack()
             miditrack.append(mido.MetaMessage(
-                type='track_name', name='Track ' + track.name, time=0))
+                type='track_name', name=f'Track {track.track_name}', time=0))
             miditrack.append(mido.Message(
                 type='program_change', program=10, time=0))
 
@@ -190,10 +191,11 @@ class EmidFile:
             for msg in events:
                 miditrack.append(msg.copy(time=msg.time - passtime))
                 passtime = msg.time
-            midifile.tracks.append(miditrack)
-        '添加轨道结束事件'
-        for miditrack in midifile.tracks:
+            '添加轨道结束事件'
             miditrack.append(mido.MetaMessage(type='end_of_track', time=0))
+            midifile.tracks.append(miditrack)
+        # for miditrack in midifile.tracks:
+        #     miditrack.append(mido.MetaMessage(type='end_of_track', time=0))
 
         if file is not None:
             midifile.save(file=file)
@@ -210,10 +212,12 @@ def import_Midi(file, transposition: int = 0) -> EmidFile:
     导入midi
     transposition参数控制移调
     '''
-    if type(file) == str:
+    if isinstance(file, str):
         midifile = mido.MidiFile(file)
-    elif type(file) == mido.MidiFile:
+    elif isinstance(file, mido.MidiFile):
         midifile = file
+    else:
+        raise TypeError
 
     emidfile = EmidFile()
     bpm = None
@@ -269,6 +273,7 @@ def batch_conv_midi2emid(path: str | None = None):
     '''
     if path is None:
         path = os.getcwd()
+
     for filename in os.listdir(path):
         name, extention = os.path.splitext(filename)
         if extention == '.mid':
@@ -282,6 +287,7 @@ def batch_conv_emid2midi(path: str | None = None):
     '''
     if path is None:
         path = os.getcwd()
+
     for filename in os.listdir(path):
         name, extention = os.path.splitext(filename)
         if extention == '.emid':
