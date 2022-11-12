@@ -1,13 +1,13 @@
 from os.path import splitext
+from tkinter import filedialog
 
 from mido import MidiFile
 
 from emid import EmidFile
 
-while True:
-    filename = input('File Directory: ').strip('"')
-    extension = splitext(filename)[1]
 
+def calc(filename: str) -> tuple[int, float]:
+    extension = splitext(filename)[1]
     if extension == '.mid':
         mid = MidiFile(filename)
         max_tick = 0
@@ -28,5 +28,16 @@ while True:
             notecount += len(emidtrack)
         length = emidfile.length / 1000
 
-    print(f'Notes: {notecount}')
-    print(f'Length: {length:.2f} m')
+    return notecount, length
+
+
+if __name__ == '__main__':
+    while True:
+        # filename = input('File Directory: ').strip('"')
+        filename = filedialog.askopenfilename()
+        print(filename)
+        notecount, length = calc(filename)
+
+        print(f'Notes: {notecount}')
+        print(f'Length: {length:.2f} m')
+        input('Press Enter to Continue...')

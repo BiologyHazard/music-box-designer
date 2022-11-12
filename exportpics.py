@@ -55,9 +55,9 @@ PAPER_INFO = {A4_VERTICAL: {'size': (210, 297), 'col': 3, 'row': 35},
               B4_HORIZONAL: {'size': (353, 250), 'col': 5, 'row': 29}}
 
 FONT_PATH = [
-    r'C:\Windows\Fonts\Deng.ttf'  # 等线
-    'C:\\Users\\' + os.getlogin() +
-    r'\AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf',  # 思源黑体
+    '\\'.join(['C:\Users', os.getlogin(),
+               r'AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf']),  # 思源黑体
+    r'C:\Windows\Fonts\Deng.ttf',  # 等线
     r'C:\Windows\Fonts\msyh.ttc',  # 微软雅黑
     r'C:\Windows\Fonts\simsun.ttc'  # 宋体
 ]
@@ -87,7 +87,7 @@ def pixel2mm(x: Number, ppi: Number = DEFAULT_PPI) -> Number:
     return x * INCH_TO_MM / ppi
 
 
-def posconvert(pos: tuple[Number, Number], ppi: Number = DEFAULT_PPI):
+def pos_mm2pixel(pos: tuple[Number, Number], ppi: Number = DEFAULT_PPI) -> tuple[int, int]:
     x, y = pos
     return (round(mm2pixel(x, ppi) - 0.5), round(mm2pixel(y, ppi) - 0.5))
 
@@ -219,7 +219,7 @@ def export_pics(file,
                                 beat = realtime / 60 * interpret_bpm  # 计算beat
 
                             time = beat * 8 * scale
-                            if time - prev_time[pitch] >= 8 - 1e-3:
+                            if time - prev_time[pitch] >= 7.5 - 1e-3:
                                 prev_time[pitch] = time
                                 notes.append((PITCH_TO_MBNUM[pitch],
                                               time))  # 添加note
@@ -268,8 +268,8 @@ def export_pics(file,
     if notes:
         if remove_blank:
             first_note_beat = math.floor(notes[0][1] / 8)
-        notes = [(pitch, time - first_note_beat * 8)
-                 for pitch, time in notes]  # 移除开头的空白
+            notes = [(pitch, time - first_note_beat * 8)
+                     for pitch, time in notes]  # 移除开头的空白
         length = notes[-1][1]
     else:
         length = 0
@@ -309,7 +309,7 @@ def export_pics(file,
                 # font2 栏右上角文字和页码
                 font2 = PIL.ImageFont.truetype(i, round(mm2pixel(6, ppi)))
             except:
-                pass
+                print(f'FONT {i} skipped.')
             else:
                 break
     else:  # 用户指定字体
@@ -327,8 +327,8 @@ def export_pics(file,
     if notemark_beat:
         notemark_beat_count = math.floor(notemark_beat / 2)
     for i in range(pages):
-        image0 = PIL.Image.new('RGBA', posconvert(size, ppi), (0, 0, 0, 0))
-        image1 = PIL.Image.new('RGBA', posconvert(
+        image0 = PIL.Image.new('RGBA', pos_mm2pixel(size, ppi), (0, 0, 0, 0))
+        image1 = PIL.Image.new('RGBA', pos_mm2pixel(
             size, ppi * ANTI_ALIAS), (0, 0, 0, 0))
         draw0 = PIL.ImageDraw.Draw(image0)
         draw1 = PIL.ImageDraw.Draw(image1)
@@ -348,13 +348,13 @@ def export_pics(file,
                 posY = ((size[1] - content_size[1]) / 2 -
                         pixel2mm(textsize[1], ppi)) - 1
 
-                draw0.text(xy=posconvert((posX, posY), ppi),
+                draw0.text(xy=pos_mm2pixel((posX, posY), ppi),
                            text=headingtext,
                            font=font0,
                            fill=(0, 0, 0, 255))
             '栏尾页码'
             colnum = i * col + j + 1
-            draw0.text(xy=posconvert((startpos[0] + 70*j + 6, endpos[1]), ppi),
+            draw0.text(xy=pos_mm2pixel((startpos[0] + 70*j + 6, endpos[1]), ppi),
                        text=str(colnum),
                        font=font1,
                        fill=(0, 0, 0, 255))
@@ -362,13 +362,13 @@ def export_pics(file,
             for k, char in enumerate(musicname):
                 textsize = font2.getsize(char)
                 draw0.text(
-                    xy=posconvert((startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
-                                   startpos[1] + 8*k + 7 - pixel2mm(textsize[1], ppi)), ppi),
+                    xy=pos_mm2pixel((startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
+                                     startpos[1] + 8*k + 7 - pixel2mm(textsize[1], ppi)), ppi),
                     text=char, font=font2, fill=(0, 0, 0, 128))
             '栏右上角页码'
             textsize = font2.getsize(str(colnum))
             draw0.text(
-                xy=posconvert(
+                xy=pos_mm2pixel(
                     (startpos[0] + 70*j + 62 - pixel2mm(textsize[0], ppi),
                      startpos[1] + 8*len(musicname) + 7 - pixel2mm(textsize[1], ppi)), ppi),
                 text=str(colnum), font=font2, fill=(0, 0, 0, 128))
@@ -386,15 +386,15 @@ def export_pics(file,
                                 posconvert((startpos[0] + 70*j + 6 + 2*2.75*m + 3, startpos[1] + 8*k + 4), ppi)],
                                fill=(0, 0, 0, 255), width=1)'''
             for k in range(row):
-                draw0.line(posconvert((startpos[0] + 70*j + 6,
-                                       startpos[1] + 8*k + 4), ppi) +
-                           posconvert((startpos[0] + 70*j + 6 + 2*29,
-                                       startpos[1] + 8*k + 4), ppi),
+                draw0.line(pos_mm2pixel((startpos[0] + 70*j + 6,
+                                         startpos[1] + 8*k + 4), ppi) +
+                           pos_mm2pixel((startpos[0] + 70*j + 6 + 2*29,
+                                         startpos[1] + 8*k + 4), ppi),
                            fill=(0, 0, 0, 128), width=1)
             '整拍横线'
             for k in range(row + 1):
-                draw0.line([posconvert((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi),
-                            posconvert((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
+                draw0.line([pos_mm2pixel((startpos[0] + 70*j + 6, startpos[1] + 8*k), ppi),
+                            pos_mm2pixel((startpos[0] + 70*j + 6 + 2*29, startpos[1] + 8*k), ppi)],
                            fill=(0, 0, 0, 255), width=1)
 
                 '小节编号'
@@ -405,7 +405,7 @@ def export_pics(file,
                     if barcount_beat_count >= barcount_numerator:
                         textsize = font2.getsize(str(barcount))
                         draw0.text(
-                            xy=posconvert(
+                            xy=pos_mm2pixel(
                                 (startpos[0] + 70*j + 3 + 2*29,
                                  startpos[1] + 8*k), ppi),
                             text=str(barcount), font=font1, fill=(0, 0, 0, 255))
@@ -420,24 +420,24 @@ def export_pics(file,
                     if notemark_beat_count >= 20:
                         for m in range(30):
                             draw0.text(
-                                xy=posconvert(
+                                xy=pos_mm2pixel(
                                     (startpos[0] + 70*j + 3 + 2*1 - 0.25+2*m-0.75*(len(NOTES_STR[m])-1),
                                      startpos[1] + 8*k-4 + 4-4*(m % 2)), ppi),
                                 text=NOTES_STR[m], font=font1, fill=(0, 0, 0, 255))
                         notemark_beat_count = 0
             '竖线'
             for k in range(30):
-                draw0.line(posconvert((startpos[0] + 70*j + 6 + 2*k,
-                                       startpos[1]), ppi) +
-                           posconvert((startpos[0] + 70*j + 6 + 2*k,
-                                       endpos[1]), ppi),
+                draw0.line(pos_mm2pixel((startpos[0] + 70*j + 6 + 2*k,
+                                         startpos[1]), ppi) +
+                           pos_mm2pixel((startpos[0] + 70*j + 6 + 2*k,
+                                         endpos[1]), ppi),
                            fill=(0, 0, 0, 255), width=1)
         '分隔线'
         for j in range(col + 1 if i < pages - 1 else lastpage_cols + 1):
-            draw0.line(posconvert((startpos[0] + 70*j,
-                                   startpos[1]), ppi) +
-                       posconvert((startpos[0] + 70*j,
-                                   endpos[1]), ppi),
+            draw0.line(pos_mm2pixel((startpos[0] + 70*j,
+                                     startpos[1]), ppi) +
+                       pos_mm2pixel((startpos[0] + 70*j,
+                                     endpos[1]), ppi),
                        fill=(0, 0, 0, 255), width=1)
 
         images0.append(image0)
@@ -451,40 +451,41 @@ def export_pics(file,
         # math.modf(x)[0]取小数部分
         rowmm = math.modf(time / (row * 8))[0] * (row * 8)
         draw1 = draws1[page]
-        draw1.ellipse(posconvert((startpos[0] + 70*coln + 6 + 2*pitch - DOT_R,
-                                  startpos[1] + rowmm - DOT_R), ppi * ANTI_ALIAS) +
-                      posconvert((startpos[0] + 70*coln + 6 + 2*pitch + DOT_R,
-                                  startpos[1] + rowmm + DOT_R), ppi * ANTI_ALIAS),
+        draw1.ellipse(pos_mm2pixel((startpos[0] + 70*coln + 6 + 2*pitch - DOT_R,
+                                    startpos[1] + rowmm - DOT_R), ppi * ANTI_ALIAS) +
+                      pos_mm2pixel((startpos[0] + 70*coln + 6 + 2*pitch + DOT_R,
+                                    startpos[1] + rowmm + DOT_R), ppi * ANTI_ALIAS),
                       fill=(0, 0, 0, 255))
     print('Resizing...')
     for i in range(pages):
-        images1[i] = images1[i].resize(posconvert(size), PIL.Image.BILINEAR)
+        images1[i] = images1[i].resize(
+            pos_mm2pixel(size), PIL.Image.Resampling.BILINEAR)
         images0[i] = PIL.Image.alpha_composite(images0[i], images1[i])
         draws0[i] = PIL.ImageDraw.Draw(images0[i])
 
     '添加border'
     for draw in draws0:
-        draw.rectangle(posconvert((0, 0), ppi) +
-                       posconvert((BORDER, size[1]), ppi),
+        draw.rectangle(pos_mm2pixel((0, 0), ppi) +
+                       pos_mm2pixel((BORDER, size[1]), ppi),
                        fill=(255, 255, 255, 0))
-        draw.rectangle(posconvert((0, 0), ppi) +
-                       posconvert((size[0], BORDER), ppi),
+        draw.rectangle(pos_mm2pixel((0, 0), ppi) +
+                       pos_mm2pixel((size[0], BORDER), ppi),
                        fill=(255, 255, 255, 0))
-        draw.rectangle(posconvert((size[0] - BORDER, 0), ppi) +
-                       posconvert((size[0], size[1]), ppi),
+        draw.rectangle(pos_mm2pixel((size[0] - BORDER, 0), ppi) +
+                       pos_mm2pixel((size[0], size[1]), ppi),
                        fill=(255, 255, 255, 0))
-        draw.rectangle(posconvert((0, size[1] - BORDER), ppi) +
-                       posconvert((size[0], size[1]), ppi),
+        draw.rectangle(pos_mm2pixel((0, size[1] - BORDER), ppi) +
+                       pos_mm2pixel((size[0], size[1]), ppi),
                        fill=(255, 255, 255, 0))
     '处理background'
     if isinstance(background, str):
         bgimage = PIL.Image.open(background).resize(
-            (posconvert(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
+            (pos_mm2pixel(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
     elif isinstance(background, PIL.Image.Image):
         bgimage = background.resize(
-            (posconvert(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
+            (pos_mm2pixel(size, ppi)), PIL.Image.BICUBIC).convert('RGBA')  # 打开，缩放，转换
     elif isinstance(background, tuple):
-        bgimage = PIL.Image.new('RGBA', posconvert(size, ppi), background)
+        bgimage = PIL.Image.new('RGBA', pos_mm2pixel(size, ppi), background)
     else:
         raise TypeError
 
