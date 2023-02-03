@@ -1,20 +1,20 @@
 '''
 用于转换.emid文件与.mid文件
 
-作者：bilibili@Bio-Hazard
+作者：bilibili @Bio-Hazard
 + QQ3482991796
 + QQ群586134350
 
-FairyMusicBox系列软件作者：bilibili@调皮的码农
+FairyMusicBox系列软件作者：bilibili @调皮的码农
 
 祝使用愉快！
 
-*错误处理尚不完善，由于输入的数据不合规或者本程序的bug导致的问题，作者概不负责
+*错误处理尚不完善，可能会因为输入的数据不合规或者本程序的bug而导致问题
 *使用前请务必了解可能造成的后果
 *请备份重要文件！
 '''
 
-import math
+from math import ceil
 import os
 
 import mido
@@ -135,12 +135,13 @@ class EmidFile:
                 pitch, time = note
                 if not firstnote:
                     file.write('#')  # 第一个音符前不需要加'#'分隔
-                file.write('%d,%d,%s' %
-                           (pitch2MBnum(pitch), time, track.track_name))
+                # file.write('%d,%d,%s' %
+                #            (pitch2MBnum(pitch), time, track.track_name))
+                file.write(f'{pitch2MBnum(pitch)},{time},{track.track_name}')
                 firstnote = False
         file.write('&')
         '计算并存储长度'
-        file.write(str(math.ceil(self.length / 4) + 1))
+        file.write(str(ceil(self.length / 4) + 1))
         file.write('*')
         tracknamelist = []
         for track in self.tracks:
@@ -259,11 +260,11 @@ def find_available_filename(path: str) -> str:
     name, extension = os.path.splitext(path)
     if os.path.exists(name + extension):
         i = 1
-        while os.path.exists(name + ' (%d)' % i + extension):
+        while os.path.exists(f'name ({i}){extension}'):
             i += 1
-        return name + ' (%d)' % i + extension
+        return f'name ({i}){extension}'
     else:
-        return name + extension
+        return f'{name}{extension}'
 
 
 def batch_conv_midi2emid(path: str | None = None):
