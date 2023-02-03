@@ -1,3 +1,4 @@
+import sys
 from os.path import splitext
 from tkinter import filedialog
 
@@ -32,12 +33,18 @@ def calc(filename: str) -> tuple[int, float]:
 
 
 if __name__ == '__main__':
-    while True:
-        # filename = input('File Directory: ').strip('"')
-        filename = filedialog.askopenfilename()
+    def disp(filename):
         print(filename)
         notecount, length = calc(filename)
-
         print(f'Notes: {notecount}')
         print(f'Length: {length:.2f} m')
         input('Press Enter to Continue...')
+
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+        disp(filename)
+    else:
+        while True:
+            # filename = input('File Directory: ').strip('"')
+            filename = filedialog.askopenfilename()
+            disp(filename)
