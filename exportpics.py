@@ -55,7 +55,7 @@ PAPER_INFO = {A4_VERTICAL: {'size': (210, 297), 'col': 3, 'row': 35},
               B4_HORIZONAL: {'size': (353, 250), 'col': 5, 'row': 29}}
 
 FONT_PATH = [
-    '\\'.join(['C:\Users', os.getlogin(),
+    '\\'.join([r'C:\Users', os.getlogin(),
                r'AppData\Local\Microsoft\Windows\Fonts\SourceHanSansSC-Regular.otf']),  # 思源黑体
     r'C:\Windows\Fonts\Deng.ttf',  # 等线
     r'C:\Windows\Fonts\msyh.ttc',  # 微软雅黑
@@ -93,8 +93,9 @@ def pos_mm2pixel(pos: tuple[Number, Number], ppi: Number = DEFAULT_PPI) -> tuple
 
 
 def export_pics(file,
-                filename: str | None = None,
-                musicname: str | None = None,
+                output_pic_name: str | None = None,
+                music_info: str | None = None,
+                *,
                 transposition: int = 0,
                 interpret_bpm: Number | None = None,
                 remove_blank: bool = True,
@@ -114,10 +115,10 @@ def export_pics(file,
     '''
     将.emid或.mid文件转换成纸带八音盒设计稿
     参数 file: emid.EmidFile实例 或 mido.MidiFile实例 或 用字符串表示的文件路径
-    参数 filename: 输出图片文件名的格式化字符串，
-                   例如：'MusicName_第%d页.png'
-                   留空则取参数file的文件名 + '_%d.png'
-    参数 musicname: 每栏右上角的信息，留空则取参数file的文件名（不含扩展名）
+    参数 output_pic_name: 输出图片文件名的格式化字符串，
+                          例如：'MusicName_第%d页.png'
+                          留空则取参数file的文件名 + '_%d.png'
+    参数 music_info: 每栏右上角的信息，留空则取参数file的文件名（不含扩展名）
     参数 transposition: 转调，表示升高的半音数，默认为0（不转调）
     参数 interpret_bpm: 设定此参数会使得note圆点的纵向间隔随着midi的bpm的变化而变化，
                         note圆点间隔的缩放倍数 = interpret_bpm / midi的bpm，
@@ -235,10 +236,10 @@ def export_pics(file,
     print('Processing Data...')
     '打开文件以及处理默认值'
     if isinstance(file, str):
-        if filename is None:
-            filename = os.path.splitext(file)[0] + '_%d.png'
-        if musicname is None:
-            musicname = os.path.splitext(os.path.split(file)[1])[0]
+        if output_pic_name is None:
+            output_pic_name = os.path.splitext(file)[0] + '_%d.png'
+        if music_info is None:
+            music_info = os.path.splitext(os.path.split(file)[1])[0]
 
         extention = os.path.splitext(file)[1]
         if extention == '.emid':
@@ -247,13 +248,13 @@ def export_pics(file,
             notes = process_midifile(mido.MidiFile(file))
         else:
             raise ValueError(
-                'Unknown file extention (\'.mid\' or \'.emid\' required)')
+                "Unknown file extention ('.mid' or '.emid' required)")
 
     elif isinstance(file, emid.EmidFile) or isinstance(file, mido.MidiFile):
-        if filename is None:
-            filename = os.path.splitext(file.filename)[0] + '_%d.png'
-        if musicname is None:
-            musicname = os.path.splitext(os.path.split(file.filename)[1])[0]
+        if output_pic_name is None:
+            output_pic_name = os.path.splitext(file.filename)[0] + '_%d.png'
+        if music_info is None:
+            music_info = os.path.splitext(os.path.split(file.filename)[1])[0]
             # TODO: This line may have bugs.
 
         if isinstance(file, emid.EmidFile):
@@ -318,10 +319,10 @@ def export_pics(file,
         font2 = PIL.ImageFont.truetype(font, round(mm2pixel(6, ppi)))
 
     print('Drawing...')
-    images0 = []  # 网格、标题、栏文字、页码，不做抗锯齿处理
-    images1 = []  # note圆点，做抗锯齿处理
-    draws0 = []
-    draws1 = []
+    images0: list[PIL.Image.Image] = []  # 网格、标题、栏文字、页码，不做抗锯齿处理
+    images1: list[PIL.Image.Image] = []  # note圆点，做抗锯齿处理
+    draws0: list[PIL.ImageDraw.ImageDraw] = []
+    draws1: list[PIL.ImageDraw.ImageDraw] = []
     barcount = barcount_startfrom
     barcount_beat_count = 999
     if notemark_beat:
@@ -359,7 +360,7 @@ def export_pics(file,
                        font=font1,
                        fill=(0, 0, 0, 255))
             '栏右上角文字'
-            for k, char in enumerate(musicname):
+            for k, char in enumerate(music_info):
                 textsize = font2.getsize(char)
                 draw0.text(
                     xy=pos_mm2pixel((startpos[0] + 70*j + 59 - pixel2mm(textsize[0], ppi) / 2,
@@ -370,7 +371,7 @@ def export_pics(file,
             draw0.text(
                 xy=pos_mm2pixel(
                     (startpos[0] + 70*j + 62 - pixel2mm(textsize[0], ppi),
-                     startpos[1] + 8*len(musicname) + 7 - pixel2mm(textsize[1], ppi)), ppi),
+                     startpos[1] + 8*len(music_info) + 7 - pixel2mm(textsize[1], ppi)), ppi),
                 text=str(colnum), font=font2, fill=(0, 0, 0, 128))
         '画格子'
         for j in range(col if i < pages - 1 else lastpage_cols):
@@ -400,6 +401,7 @@ def export_pics(file,
                 '小节编号'
                 # edit Feb12,2022 by mr258876:
                 # Added bar count.
+                # 可能有bug
                 if barcount_numerator:
                     barcount_beat_count += 1
                     if barcount_beat_count >= barcount_numerator:
@@ -415,6 +417,7 @@ def export_pics(file,
                 '音高标记'
                 # edit Feb12,2022 by mr258876:
                 # Added note marks.
+                # 可能有bug
                 if notemark_beat:
                     notemark_beat_count += 1
                     if notemark_beat_count >= 20:
@@ -494,7 +497,7 @@ def export_pics(file,
     for pagenum, image in enumerate(images0):
         cpimage = PIL.Image.alpha_composite(bgimage, image)  # 拼合图像
         if save_pic:
-            save_path = filename % (pagenum + 1)
+            save_path = output_pic_name % (pagenum + 1)
             if not overwrite:
                 save_path = emid.find_available_filename(save_path)
             print(f'Exporting pics ({pagenum + 1} of {pages})...')
@@ -522,7 +525,7 @@ def batch_export_pics(path: str | None = None,
     for filename in os.listdir(path):
         extention = os.path.splitext(filename)[1]
         if extention == '.mid' or extention == '.emid':
-            print('Converting %s ...' % filename)
+            print(f'Converting {filename} ...')
             export_pics(file=filename,
                         papersize=papersize,
                         ppi=ppi,
