@@ -19,9 +19,9 @@ import os
 
 import mido
 
-DEFAULT_BPM = 120.0
-TIME_PER_BEAT = 8
-DEFAULT_TICKS_PER_BEAT = 96  # FL导出的midi默认为此值
+DEFAULT_BPM: float = 120.0
+TIME_PER_BEAT: int = 8
+DEFAULT_TICKS_PER_BEAT: int = 96  # FL导出的midi默认为此值
 
 PITCH_TO_MBNUM: list[int] = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77,
                              76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
@@ -31,20 +31,20 @@ MBNUM_TO_PITCH: dict[int, int] = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 
                                   64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
 
 
-def pitch2MBnum(pitch: int):
+def pitch2MBnum(pitch: int) -> int:
     return MBNUM_TO_PITCH[pitch]
 
 
-def MBnum2pitch(MBnum: int):
+def MBnum2pitch(MBnum: int) -> int:
     return PITCH_TO_MBNUM[MBnum]
 
 
-class EmidTrack(list):
+class EmidTrack(list[list[int]]):
     'note的pitch使用midi音高而非八音盒序号存储'
 
     def __init__(self, track_name: str = '') -> None:
-        self.track_name = track_name
-        self.length = 0
+        self.track_name: str = track_name
+        self.length: int = 0
 
     def __repr__(self) -> str:
         return f'EmidTrack(name={repr(self.track_name)}, notes={super().__repr__()})'
@@ -69,8 +69,8 @@ class EmidFile:
 
     def __init__(self, file=None, bpm: float = DEFAULT_BPM):
         self.tracks: list[EmidTrack] = []
-        self.length = 0
-        self.bpm = bpm
+        self.length: int = 0
+        self.bpm: float = bpm
         self.filename = ''
 
         if isinstance(file, str):
@@ -85,25 +85,25 @@ class EmidFile:
         notestext, s2 = emidtext.split('&')
         length, tracks_name = s2.split('*')
         self.length = int(length)
-        note_list = notestext.split('#')
-        track_name_list = tracks_name.split(',')
-        track_name_dict = {k: v for v, k in enumerate(track_name_list)}
+        note_list: list[str] = notestext.split('#')
+        track_name_list: list[str] = tracks_name.split(',')
+        track_name_dict: dict[str, int] = {k: v for v, k in enumerate(track_name_list)}
         '添加空轨道'
         for track_name in track_name_list:
             self.tracks.append(EmidTrack(track_name))
         '添加音符'
         for note in note_list:
             MBnum, time, track_name = note.split(',')
-            pitch = MBnum2pitch(int(MBnum))
+            pitch: int = MBnum2pitch(int(MBnum))
             time = float(time)
-            track_idx = track_name_dict[track_name]
+            track_idx: int = track_name_dict[track_name]
             self.tracks[track_idx].add_note(pitch, time)
         '更新长度'
         self._update_length()
 
     def _update_length(self) -> int:
         for track in self.tracks:
-            tracklength = track._update_length()
+            tracklength: int = track._update_length()
             if tracklength > self.length:
                 self.length = tracklength
         return self.length
@@ -129,7 +129,7 @@ class EmidFile:
                 self._save(file)
 
     def _save(self, file) -> None:
-        firstnote = True
+        firstnote: bool = True
         for track in self.tracks:
             for note in track:
                 pitch, time = note
@@ -143,7 +143,7 @@ class EmidFile:
         '计算并存储长度'
         file.write(str(math.ceil(self.length / 4) + 1))
         file.write('*')
-        tracknamelist = []
+        tracknamelist: list[str] = []
         for track in self.tracks:
             tracknamelist.append(track.track_name)
         file.write(','.join(tracknamelist))
