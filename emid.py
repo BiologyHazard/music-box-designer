@@ -14,7 +14,7 @@ FairyMusicBox系列软件作者：bilibili @调皮的码农
 *请备份重要文件！
 '''
 
-from math import ceil
+import math
 import os
 
 import mido
@@ -23,12 +23,12 @@ DEFAULT_BPM = 120.0
 TIME_PER_BEAT = 8
 DEFAULT_TICKS_PER_BEAT = 96  # FL导出的midi默认为此值
 
-PITCH_TO_MBNUM = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78,
-                  77, 76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
-MBNUM_TO_PITCH = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 6, 84: 7, 83: 8,
-                  82: 9, 81: 10, 80: 11, 79: 12, 78: 13, 77: 14, 76: 15, 75: 16,
-                  74: 17, 73: 18, 72: 19, 71: 20, 70: 21, 69: 22, 67: 23, 65: 24,
-                  64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
+PITCH_TO_MBNUM: list[int] = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77,
+                             76, 75, 74, 73, 72, 71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
+MBNUM_TO_PITCH: dict[int, int] = {93: 0, 91: 1, 89: 2, 88: 3, 87: 4, 86: 5, 85: 6, 84: 7, 83: 8,
+                                  82: 9, 81: 10, 80: 11, 79: 12, 78: 13, 77: 14, 76: 15, 75: 16,
+                                  74: 17, 73: 18, 72: 19, 71: 20, 70: 21, 69: 22, 67: 23, 65: 24,
+                                  64: 25, 62: 26, 60: 27, 55: 28, 53: 29}
 
 
 def pitch2MBnum(pitch: int):
@@ -141,7 +141,7 @@ class EmidFile:
                 firstnote = False
         file.write('&')
         '计算并存储长度'
-        file.write(str(ceil(self.length / 4) + 1))
+        file.write(str(math.ceil(self.length / 4) + 1))
         file.write('*')
         tracknamelist = []
         for track in self.tracks:

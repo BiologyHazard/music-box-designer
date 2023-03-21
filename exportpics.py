@@ -24,12 +24,12 @@ import PIL.ImageFont
 
 import emid
 
-PITCH_TO_MBNUM = {93: 29, 91: 28, 89: 27, 88: 26, 87: 25, 86: 24, 85: 23, 84: 22,
-                  83: 21, 82: 20, 81: 19, 80: 18, 79: 17, 78: 16, 77: 15, 76: 14,
-                  75: 13, 74: 12, 73: 11, 72: 10, 71: 9, 70: 8, 69: 7, 67: 6,
-                  65: 5, 64: 4, 62: 3, 60: 2, 55: 1, 53: 0}
-NOTES_STR = ["C", "D", "G", "A", "B", "C", "D", "E", "F", "#F", "G", "#G", "A", "#A", "B",
-             "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B", "C", "D", "E"]
+PITCH_TO_MBNUM: dict[int, int] = {93: 29, 91: 28, 89: 27, 88: 26, 87: 25, 86: 24, 85: 23, 84: 22,
+                                  83: 21, 82: 20, 81: 19, 80: 18, 79: 17, 78: 16, 77: 15, 76: 14,
+                                  75: 13, 74: 12, 73: 11, 72: 10, 71: 9, 70: 8, 69: 7, 67: 6,
+                                  65: 5, 64: 4, 62: 3, 60: 2, 55: 1, 53: 0}
+NOTES_STR: list[str] = ["C", "D", "G", "A", "B", "C", "D", "E", "F", "#F", "G", "#G", "A", "#A", "B",
+                        "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B", "C", "D", "E"]
 
 LEFT_ALIGN = 0
 CENTER_ALIGN = 1
@@ -116,28 +116,28 @@ def export_pics(file,
     将.emid或.mid文件转换成纸带八音盒设计稿
     参数 file: emid.EmidFile实例 或 mido.MidiFile实例 或 用字符串表示的文件路径
     参数 output_pic_name: 输出图片文件名的格式化字符串，
-                          例如：'MusicName_第%d页.png'
-                          留空则取参数file的文件名 + '_%d.png'
+                    例如：'MusicName_第%d页.png'
+                    留空则取参数file的文件名 + '_%d.png'
     参数 music_info: 每栏右上角的信息，留空则取参数file的文件名（不含扩展名）
     参数 transposition: 转调，表示升高的半音数，默认为0（不转调）
     参数 interpret_bpm: 设定此参数会使得note圆点的纵向间隔随着midi的bpm的变化而变化，
-                        note圆点间隔的缩放倍数 = interpret_bpm / midi的bpm，
-                        例如，midi的bpm被设定为75，interpret_bpm设定为100，
-                        则note圆点的间隔拉伸为4/3倍，
-                        设置为None则忽略midi的bpm信息，固定1拍=8毫米间隔，
-                        该参数仅对midi生效，emid会自动忽略此参数，
-                        默认为None
+                    note圆点间隔的缩放倍数 = interpret_bpm / midi的bpm，
+                    例如，midi的bpm被设定为75，interpret_bpm设定为100，
+                    则note圆点的间隔拉伸为4/3倍，
+                    设置为None则忽略midi的bpm信息，固定1拍=8毫米间隔，
+                    该参数仅对midi生效，emid会自动忽略此参数，
+                    默认为None
     参数 remove_blank: True 或 False，是否移除开头的空白，默认为True
     参数 scale: 音符位置的缩放量，大于1则拉伸纸带长度，默认为1（不缩放）
     参数 heading: 可以是一个二元元组，
-                  heading[0]: 页眉文字字符串，
-                  heading[1]: exportpics.LEFT_ALIGN（左对齐）或
-                              exportpics.CENTER_ALIGN（居中对齐）或
-                              exportpics.RIGHT_ALIGN（右对齐），
-                              用以指定对齐方式，
-                  默认为None
+                    heading[0]: 页眉文字字符串，
+                    heading[1]: exportpics.LEFT_ALIGN（左对齐）或
+                                exportpics.CENTER_ALIGN（居中对齐）或
+                                exportpics.RIGHT_ALIGN（右对齐），
+                                用以指定对齐方式，
+                    默认为None
     参数 font: 用字符串表示的字体文件路径，
-               留空则从FONT_PATH中按序取用
+                    留空则从FONT_PATH中按序取用
     参数 papersize: 可以使用PAPER_INFO中的预设值（例如exportpics.A4_VERTICAL），
                     也可以使用字典来自定义，格式为
                     { 'size': 一个元组(宽, 高)，单位毫米,
@@ -147,29 +147,29 @@ def export_pics(file,
                     默认为exportpics.A4_VERTICAL（竖版A4）
     参数 ppi: 输出图片的分辨率，单位像素/英寸，默认为exportpics.DEFALT_PPI
     参数 background: 背景图片或颜色，
-                     可以是用字符串表示的文件路径，
-                     也可以是PIL.Image.Image实例，
-                     也可以是一个表示颜色的(R, G, B, Alpha)元组，
-                     默认为(255, 255, 255, 255)，表示白色
+                    可以是用字符串表示的文件路径，
+                    也可以是PIL.Image.Image实例，
+                    也可以是一个表示颜色的(R, G, B, Alpha)元组，
+                    默认为(255, 255, 255, 255)，表示白色
     参数 save_pic: True 或 False，是否将图片写入磁盘，默认为True
     参数 overwrite: True 或 False，是否允许覆盖同名文件，默认为False，
                     警告：设置为True可能导致原有文件丢失，请注意备份！
     参数 notemark_beat: 可以是一个正整数，表示添加音高标记的间隔（单位为拍），
-                        也可以是None，不添加音高标记，
-                        默认为None
+                    也可以是None，不添加音高标记，
+                    默认为None
     参数 barcount_numerator: 可以是一个正整数，表示添加小节号标记的间隔（单位为拍），
-                             一般来说设置为每小节的拍数
-                             也可以是None，不添加小节号标记，
-                             默认为None
+                    一般来说设置为每小节的拍数
+                    也可以是None，不添加小节号标记，
+                    默认为None
     参数 barcount_startfrom: 小节号初始值，默认为0，
-                             参数barcount_numerator为None时自动忽略
+                    参数barcount_numerator为None时自动忽略
 
     函数返回包含若干PIL.Image.Image实例的list
     '''
 
-    def process_emidfile(emidfile: emid.EmidFile):
+    def process_emidfile(emidfile: emid.EmidFile) -> list[tuple[int, float]]:
         '处理emid文件'
-        notes = []
+        notes: list[tuple[int, float]] = []
         for track in emidfile.tracks:
             for pitch, time in track:
                 if pitch + transposition in PITCH_TO_MBNUM:
@@ -178,11 +178,12 @@ def export_pics(file,
         notes.sort(key=itemgetter(1, 0))
         return notes
 
-    def process_midifile(midifile: mido.MidiFile):
+    def process_midifile(midifile: mido.MidiFile) -> list[tuple[int, float]]:
         '处理midi文件'
-        ticks_per_beat = midifile.ticks_per_beat
-        notes = []
-        prev_time = {pitch: -8 for pitch, mbnum in PITCH_TO_MBNUM.items()}
+        ticks_per_beat: int = midifile.ticks_per_beat
+        notes: list[tuple[int, float]] = []
+        prev_time: dict[int, int] = {
+            pitch: -8 for pitch, mbnum in PITCH_TO_MBNUM.items()}
 
         if interpret_bpm is not None:
             tempo_events = []
@@ -194,7 +195,7 @@ def export_pics(file,
                     if msg.type == 'set_tempo':
                         tempo_events.append((msg.tempo, miditime))
 
-            realtime = 0.0
+            realtime: float = 0.0
             for i in range(len(tempo_events)):
                 tempo = 0 if i == 0 else tempo_events[i-1][0]
                 delta_miditime = tempo_events[i][1] - tempo_events[i-1][1]
@@ -203,7 +204,7 @@ def export_pics(file,
                 time_passed.append(realtime)
 
         for track in midifile.tracks:
-            miditime = 0
+            miditime: int = 0
             for msg in track:
                 miditime += msg.time
                 if msg.type == 'note_on':
