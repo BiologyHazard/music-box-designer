@@ -1,9 +1,4 @@
-/*
-!emid.py
-!emid2midi.py
-!example.emid
-!example.mid
-!exportpics.py
-!notecounter.py
-!README.md
-!.gitignore
+__pycache__/
+.mypy_cache/
+build/
+dist/
