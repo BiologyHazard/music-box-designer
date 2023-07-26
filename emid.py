@@ -5,8 +5,7 @@ from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from consts import (DEFAULT_TICKS_PER_BEAT, MUSIC_BOX_30_NOTES_PITCH,
-                    TIME_PER_BEAT, T_pitch)
+from consts import DEFAULT_TICKS_PER_BEAT, TIME_PER_BEAT, T_pitch, DEFAULT_DURATION
 from utils import mbindex_to_pitch, pitch_to_mbindex
 
 
@@ -68,7 +67,7 @@ class EmidFile:
 
     def update_length(self) -> int:
         '''更新长度并返回更新后的长度'''
-        self.length = math.ceil(max(note.time for track in self.tracks for note in track) / TIME_PER_BEAT * 2) + 1
+        self.length = math.ceil(max(note.time for track in self.tracks for note in track.notes) / TIME_PER_BEAT * 2) + 1
         return self.length
 
     def transpose(self, transposition: int) -> None:
@@ -140,12 +139,14 @@ class EmidFile:
                     events.append(Message(
                         type='note_on',
                         note=note.pitch + transposition,
-                        time=round(note.time * ticks_per_beat)))
+                        time=round(note.time * ticks_per_beat)
+                    ))
                     events.append(Message(
                         type='note_off',
                         note=note.pitch + transposition,
-                        time=round((note.time + 1) * ticks_per_beat)))
-            events.sort(key=lambda msg: msg.time)  # type: ignore
+                        time=round((note.time + DEFAULT_DURATION) * ticks_per_beat)
+                    ))
+            events.sort(key=lambda message: (message.time, ['note_off', 'note_on'].index(message.type)))  # type: ignore
 
             midi_track = MidiTrack()
             midi_track.append(MetaMessage(type='track_name', name=f'Track {track.name}', time=0))
