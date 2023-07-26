@@ -14,8 +14,9 @@ FairyMusicBox系列软件作者：bilibili @调皮的码农
 *请备份重要文件！
 '''
 
+from typing import Self
 import math
-import os
+from pathlib import Path
 
 import mido
 
@@ -135,8 +136,6 @@ class EmidFile:
                 pitch, time = note
                 if not firstnote:
                     file.write('#')  # 第一个音符前不需要加'#'分隔
-                # file.write('%d,%d,%s' %
-                #            (pitch2MBnum(pitch), time, track.track_name))
                 file.write(f'{pitch2MBnum(pitch)},{time},{track.track_name}')
                 firstnote = False
         file.write('&')
@@ -207,92 +206,86 @@ class EmidFile:
                 midifile.save(find_available_filename(filename))
         return midifile
 
+    @classmethod
+    def from_midi(cls, file: str | mido.MidiFile, transposition: int = 0) -> 'EmidFile':
+        '''
+        导入midi
+        transposition参数控制移调
+        '''
+        if isinstance(file, str):
+            midifile = mido.MidiFile(file)
+        elif isinstance(file, mido.MidiFile):
+            midifile = file
+        else:
+            raise TypeError
 
-def import_Midi(file, transposition: int = 0) -> EmidFile:
-    '''
-    导入midi
-    transposition参数控制移调
-    '''
-    if isinstance(file, str):
-        midifile = mido.MidiFile(file)
-    elif isinstance(file, mido.MidiFile):
-        midifile = file
-    else:
-        raise TypeError
-
-    emidfile = EmidFile()
-    bpm = None
-    for trackidx, miditrack in enumerate(midifile.tracks):
-        emidtrack = EmidTrack(str(trackidx))
-        miditime = 0
-        for msg in miditrack:
-            miditime += msg.time
-            if msg.type == 'note_on':
-                if msg.velocity > 0:
-                    emidtime = miditime / midifile.ticks_per_beat * TIME_PER_BEAT
-                    if msg.note + transposition in MBNUM_TO_PITCH:
-                        emidtrack.add_note(msg.note + transposition, emidtime)
-            elif msg.type == 'set_tempo':
-                if bpm is None:
-                    bpm = mido.tempo2bpm(msg.tempo)
-        if bpm is None:
-            bpm = DEFAULT_BPM
-        emidfile.tracks.append(emidtrack)
-    emidfile._update_length()
-    return emidfile
+        emidfile: Self = cls()
+        bpm = None
+        for trackidx, miditrack in enumerate(midifile.tracks):
+            emidtrack = EmidTrack(str(trackidx))
+            miditime = 0
+            for msg in miditrack:
+                miditime += msg.time
+                if msg.type == 'note_on':
+                    if msg.velocity > 0:
+                        emidtime = miditime / midifile.ticks_per_beat * TIME_PER_BEAT
+                        if msg.note + transposition in MBNUM_TO_PITCH:
+                            emidtrack.add_note(msg.note + transposition, emidtime)
+                elif msg.type == 'set_tempo':
+                    if bpm is None:
+                        bpm = mido.tempo2bpm(msg.tempo)
+            if bpm is None:
+                bpm = DEFAULT_BPM
+            emidfile.tracks.append(emidtrack)
+        emidfile._update_length()
+        return emidfile
 
 
-def midi2emid(midifilename, emidfilename: str | None = None):
+def midi2emid(midifilename, emidfilename: str | None = None) -> None:
     '快速将.mid文件转换为.emid文件'
     if emidfilename is None:
-        emidfilename = os.path.splitext(midifilename)[0] + '.emid'
-    import_Midi(midifilename).save(emidfilename)
+        emidfilename = str(Path(midifilename).with_suffix('.emid'))
+    EmidFile.from_midi(midifilename).save(emidfilename)
 
 
-def emid2midi(emidfilename, midifilename: str | None = None):
+def emid2midi(emidfilename, midifilename: str | None = None) -> None:
     '快速将.emid文件转换为.mid文件'
     if midifilename is None:
-        midifilename = os.path.splitext(emidfilename)[0] + '.mid'
+        midifilename = str(Path(emidfilename).with_suffix('.mid'))
     EmidFile(emidfilename).export_Midi(midifilename)
 
 
-def find_available_filename(path: str) -> str:
-    name, extension = os.path.splitext(path)
-    if os.path.exists(name + extension):
+def find_available_filename(path: str | Path) -> str:
+    path = Path(path)
+    if path.exists():
         i = 1
-        while os.path.exists(f'name ({i}){extension}'):
+        while path.with_name(f'{path.stem} ({i}){path.suffix}').exists():
             i += 1
-        return f'name ({i}){extension}'
+        return str(path.with_name(f'{path.stem} ({i}){path.suffix}'))
     else:
-        return f'{name}{extension}'
+        return str(path)
 
 
-def batch_conv_midi2emid(path: str | None = None):
+def batch_conv_midi2emid(path: str | Path = Path()) -> None:
     '''
     批量将path目录下的所有.mid文件转换为.emid文件
     如果path参数留空，则取当前工作目录
     '''
-    if path is None:
-        path = os.getcwd()
-
-    for filename in os.listdir(path):
-        name, extention = os.path.splitext(filename)
-        if extention == '.mid':
-            midi2emid(filename, name + '.emid')
+    path = Path(path)
+    for filename in path.iterdir():
+        if path.suffix == '.mid':
+            midi2emid(filename, str(path.with_suffix('.emid')))
 
 
-def batch_conv_emid2midi(path: str | None = None):
+def batch_conv_emid2midi(path: str | Path = Path()) -> None:
     '''
     批量将path目录下的所有.emid文件转换为.mid文件
     如果path参数留空，则取当前工作目录
     '''
-    if path is None:
-        path = os.getcwd()
-
-    for filename in os.listdir(path):
-        name, extention = os.path.splitext(filename)
-        if extention == '.emid':
-            emid2midi(filename, name + '.mid')
+    path = Path(path)
+    for filename in path.iterdir():
+        if path.suffix == '.emid':
+            emid2midi(filename, str(path.with_suffix('.mid')))
 
 
 if __name__ == '__main__':

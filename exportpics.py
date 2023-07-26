@@ -221,7 +221,7 @@ def export_pics(file,
                                 beat = realtime / 60 * interpret_bpm  # 计算beat
 
                             time = beat * 8 * scale
-                            if time - prev_time[pitch] >= 7.5 - 1e-3:
+                            if time - prev_time[pitch] >= 7.0 - 1e-3:
                                 prev_time[pitch] = time
                                 notes.append((PITCH_TO_MBNUM[pitch],
                                               time))  # 添加note
@@ -275,6 +275,9 @@ def export_pics(file,
         length = notes[-1][1]
     else:
         length = 0
+
+    print(f'Notes: {len(notes)}')
+    print(f'Length: {length / 1000:.3f}m')
 
     if papersize == AUTO_SIZE:  # 计算纸张大小
         col = 1
