@@ -20,18 +20,13 @@ class EmidNote:
 
 @dataclass
 class EmidTrack:
-    name: str
-    notes: list[EmidNote]
+    name: str = ''
+    notes: list[EmidNote] = []
 
     def transpose(self, transposition: int) -> None:
-        i = 0
-        while i < len(self):
-            note: EmidNote = self[i]
-            if note.pitch + transposition in range(128):
-                self[i] = note.__class__(note.pitch + transposition, note.time)
-                i += 1
-            else:
-                del self[i]
+        self.notes = [note.__class__(note.pitch + transposition, note.time)
+                      for note in self.notes
+                      if note.pitch + transposition in range(128)]
 
 
 @dataclass
@@ -50,8 +45,7 @@ class EmidFile:
         # 添加空轨道
         tracks: list[EmidTrack] = []
         for track_name in track_name_list:
-            new_track = EmidTrack()
-            new_track.name = track_name
+            new_track = EmidTrack(track_name)
             tracks.append(new_track)
         # 添加音符
         for note_str in note_str_list:
@@ -62,7 +56,7 @@ class EmidFile:
                 continue
             time: float = float(time_str) / TIME_PER_BEAT
             track_index: int = track_name_dict[trackname]
-            tracks[track_index].append(EmidNote(pitch, time))
+            tracks[track_index].notes.append(EmidNote(pitch, time))
         return cls(tracks, length)
 
     @classmethod
@@ -85,7 +79,7 @@ class EmidFile:
         note_str: str = '#'.join(
             f'{pitch_to_mbindex(note.pitch)},{round(note.time * TIME_PER_BEAT)},{track.name}'
             for track in self.tracks
-            for note in track
+            for note in track.notes
         )
         track_names_str: str = ','.join(track.name for track in self.tracks)
         return ''.join((note_str, '&', str(self.length), '*', track_names_str))
@@ -114,10 +108,10 @@ class EmidFile:
                 if message.type == 'note_on':
                     if message.velocity > 0:
                         time: float = midi_tick / midi_file.ticks_per_beat
-                        emid_track.append(EmidNote(message.note, time))
+                        emid_track.notes.append(EmidNote(message.note, time))
             if emid_track:
                 emid_track.name = str(len(tracks))
-            tracks.append(emid_track)
+                tracks.append(emid_track)
 
         emid_file: Self = cls()
         emid_file.tracks = tracks
@@ -141,7 +135,7 @@ class EmidFile:
 
         for track in self.tracks:
             events: list[Message] = []
-            for note in track:
+            for note in track.notes:
                 if note.pitch + transposition in range(128):
                     events.append(Message(
                         type='note_on',
