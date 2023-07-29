@@ -1,11 +1,12 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from consts import DEFAULT_TICKS_PER_BEAT, TIME_PER_BEAT, T_pitch, DEFAULT_DURATION
+from consts import (DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, TIME_PER_BEAT,
+                    T_pitch)
 from utils import mbindex_to_pitch, pitch_to_mbindex
 
 
@@ -20,7 +21,7 @@ class EmidNote:
 @dataclass
 class EmidTrack:
     name: str = ''
-    notes: list[EmidNote] = []
+    notes: list[EmidNote] = field(default_factory=lambda: [])
 
     def transpose(self, transposition: int) -> None:
         self.notes = [note.__class__(note.pitch + transposition, note.time)
@@ -30,7 +31,7 @@ class EmidTrack:
 
 @dataclass
 class EmidFile:
-    tracks: list[EmidTrack] = []
+    tracks: list[EmidTrack] = field(default_factory=lambda: [])
     length: int = 1
 
     @classmethod
@@ -99,7 +100,7 @@ class EmidFile:
                   transposition: int = 0,
                   ) -> Self:
         tracks: list[EmidTrack] = []
-        for midi_track in midi_file:
+        for midi_track in midi_file.tracks:
             emid_track = EmidTrack()
             midi_tick: int = 0
             for message in midi_track:
@@ -160,6 +161,3 @@ class EmidFile:
             midi_file.tracks.append(midi_track)
 
         return midi_file
-
-    def __str__(self) -> str:
-        return self.to_str()
