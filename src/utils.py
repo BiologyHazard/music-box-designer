@@ -1,5 +1,6 @@
-from consts import MUSIC_BOX_30_NOTES_PITCH, T_pitch
 from typing import BinaryIO, Literal
+
+from .consts import MUSIC_BOX_30_NOTES_PITCH, T_pitch
 
 
 def pitch_to_mbindex(pitch: T_pitch) -> int:

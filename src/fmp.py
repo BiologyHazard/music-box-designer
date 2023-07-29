@@ -1,10 +1,13 @@
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self, BinaryIO, Any
-import json
-from mido import MidiFile, MidiTrack, Message, MetaMessage, bpm2tempo, tempo2bpm
-from consts import T_pitch, DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT
-from utils import read_int, read_bool
+from typing import Any, BinaryIO, Self
+
+from mido import (Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo,
+                  tempo2bpm)
+
+from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, T_pitch
+from .utils import read_bool, read_int
 
 FMP_TRANSPOSITION = -7
 
