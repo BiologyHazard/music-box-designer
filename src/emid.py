@@ -5,7 +5,7 @@ from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, int
+from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT
 from .utils import mbindex_to_pitch, pitch_to_mbindex
 
 TIME_PER_BEAT = 8

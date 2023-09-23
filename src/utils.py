@@ -1,3 +1,4 @@
+import logging
 from typing import BinaryIO, Literal
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
@@ -35,15 +36,15 @@ def read_bool(file: BinaryIO) -> bool:
     return bool(i)
 
 
-def mm_to_pixel(x: float, ppi: float) -> float:
+def mm_to_pixel(x: float, /, ppi: float) -> float:
     return x / MM_PER_INCH * ppi
 
 
-def pixel_to_mm(x: float, ppi: float) -> float:
+def pixel_to_mm(x: float, /, ppi: float) -> float:
     return x * MM_PER_INCH / ppi
 
 
-def pos_mm_to_pixel(pos: tuple[float, float], ppi: float) -> tuple[int, int]:
+def pos_mm_to_pixel(pos: tuple[float, float], /, ppi: float) -> tuple[int, int]:
     x, y = pos
     return (round(mm_to_pixel(x, ppi)), round(mm_to_pixel(y, ppi)))
 
@@ -57,6 +58,15 @@ def get_empty_draw() -> ImageDraw.ImageDraw:
     return ImageDraw.Draw(Image.new('RGBA', (0, 0)))
 
 
+# def log_func(f):
+#     def wrapped(*args, **kwargs):
+#         result = f(*args, **kwargs)
+#         logging.debug(f'{f.__name__}({args}, {kwargs}) returns {result}')
+#         return result
+#     return wrapped
+
+
+# @log_func
 def get_text_height(text: str, font: ImageFont.FreeTypeFont, **kwargs) -> int:
     return (
         get_empty_draw().multiline_textbbox((0, 0), text, font, 'la', **kwargs)[3]
