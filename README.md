@@ -9,8 +9,8 @@
 - 生成纸带设计稿图片
 
 作者：[bilibili@Bio-Hazard](https://space.bilibili.com/37179776)
-- QQ 3482991796
-- QQ群 586134350
+- QQ [3482991796](https://wpa.qq.com/msgrd?&uin=3482991796)
+- QQ群 [586134350](https://qm.qq.com/cgi-bin/qm/qr?k=aM1lRdY9HvrQW3huC81hRmCQaE7CkyXh)
 
 FairyMusicBox 系列软件作者：[bilibili@调皮的码农](https://space.bilibili.com/40962795)
 
