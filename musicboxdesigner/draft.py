@@ -3,7 +3,7 @@ import math
 from bisect import bisect_left
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self, Any
+from typing import Literal, Self
 
 from mido import MidiFile, tick2second
 from PIL import Image, ImageDraw, ImageFont
@@ -33,54 +33,6 @@ class Note:
     '''音高'''
     time: float
     '''节拍数'''
-
-
-# class Notes(list[Note]):
-#     @classmethod
-#     def load_from_file(cls,
-#                        file: str | Path,
-#                        *,
-#                        transposition: int = 0,
-#                        interpret_bpm: float | None = None,
-#                        remove_blank: bool = False,
-#                        ) -> Self:
-#         if isinstance(file, str):
-#             file = Path(file)
-#         if file.suffix == '.emid':
-#             return cls.load_from_emid(EmidFile.load_from_file(file))
-#         elif file.suffix == '.fmp':
-#             return cls.load_from_fmp(FmpFile.load_from_file(file))
-#         elif file.suffix == '.mid':
-#             return cls.load_from_midi(MidiFile(file))
-
-#     @staticmethod
-#     def _get_notes_from_emid(emid_file: EmidFile) -> list[tuple[int, float]]:
-#         return [(note.pitch, note.time)
-#                 for track in emid_file.tracks
-#                 for note in track.notes]
-
-#     @staticmethod
-#     def _get_notes_from_fmp(fmp_file: FmpFile) -> list[tuple[int, float]]:
-#         return [(note.pitch, note.time)
-#                 for track in fmp_file.tracks
-#                 for note in track.notes]
-
-#     @classmethod
-#     def load_from_emid(cls, emid_file: EmidFile) -> Self:
-#         self: Self = cls()
-#         for track in emid_file.tracks:
-#             for note in track.notes:
-#                 if note in MUSIC_BOX_30_NOTES_PITCH:
-#                     self.append(Note(MUSIC_BOX_30_NOTES_PITCH.index(note.pitch)))
-#         return self
-
-#     @classmethod
-#     def load_from_fmp(cls, fmp_file: FmpFile) -> Self:
-#         ...
-
-#     @classmethod
-#     def load_from_midi(cls, midi_File: MidiFile) -> Self:
-#         ...
 
 
 class DraftSettings(BaseModel, arbitrary_types_allowed=True):
@@ -182,12 +134,14 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
 
 
 class ImageList(list[Image.Image]):
-    def save(self, file_name: str = '{}.png') -> None:
-        # if file_name is None:
-        #     file_name = self.file_name
+    file_name: str
+
+    def save(self, file_name: str | None = None) -> None:
+        if file_name is None:
+            file_name = self.file_name
         for i, image in enumerate(self):
             logging.info(f'Saving image {i+1} of {len(self)}...')
-            image.save(file_name.format(i))
+            image.save(file_name.format(i+1))
 
 
 class Draft:
@@ -633,4 +587,6 @@ class Draft:
             backgrond_image = Image.new('RGBA', image_size, settings.background.as_hex())
 
         logging.info('Compositing images...')
-        return ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
+        image_list = ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
+        image_list.file_name = f'{title}_{{}}.png'
+        return image_list
