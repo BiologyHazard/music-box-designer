@@ -6,7 +6,7 @@ from typing import Any, BinaryIO, Self
 from mido import (Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo,
                   tempo2bpm)
 
-from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, T_pitch
+from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT
 from .utils import read_bool, read_int
 
 FMP_TRANSPOSITION = -7
@@ -14,7 +14,7 @@ FMP_TRANSPOSITION = -7
 
 @dataclass(frozen=True)
 class FmpNote:
-    pitch: T_pitch
+    pitch: int
     '''midi音高'''
     time: float
     '''音符起始位置的节拍数'''
@@ -326,7 +326,7 @@ class FmpFile:
                         note=note.pitch + transposition,
                         time=round((note.time + note.duration) * ticks_per_beat),
                     ))
-            midi_track.sort(key=lambda msg: msg.time)  # type: ignore
+            midi_track.sort(key=lambda msg: msg.time)
             midi_file.tracks.append(midi_track)
 
         for midi_track in midi_file.tracks:
@@ -343,13 +343,3 @@ class FmpFile:
     def set_velocity(self, velocity: float) -> None:
         for track in self.tracks:
             track.set_velocity(velocity)
-
-
-# print(FmpFile.load_from_file(r"D:\BioHazard\Musics\Music Box\230531-world.execute(me);\汪汪的\world.execute(me);.fmp"))
-# m = MidiFile('examples/example.mid')
-# m.print_tracks()
-f = FmpFile.load_from_file('examples/example.fmp')
-print(f)
-m = f.export_midi()
-m.print_tracks()
-m.save('1.mid')

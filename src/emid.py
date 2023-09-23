@@ -5,14 +5,15 @@ from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from .consts import (DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, TIME_PER_BEAT,
-                     T_pitch)
+from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, int
 from .utils import mbindex_to_pitch, pitch_to_mbindex
+
+TIME_PER_BEAT = 8
 
 
 @dataclass(frozen=True)
 class EmidNote:
-    pitch: T_pitch
+    pitch: int
     '''midi音高'''
     time: float
     '''节拍数'''
@@ -63,7 +64,7 @@ class EmidFile:
     def load_from_file(cls, file: str | bytes | Path | TextIO) -> Self:
         if isinstance(file, (str, bytes, Path)):
             with open(file, 'r', encoding='utf-8') as fp:
-                file = fp
+                return cls.from_str(fp.read())
         return cls.from_str(file.read())
 
     def update_length(self) -> int:
