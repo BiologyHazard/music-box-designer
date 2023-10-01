@@ -49,7 +49,7 @@ FairyMusicBox 3.0.0 实现了本程序的几乎全部功能。如果您只是想
     pip install -r requirements.txt
     ```
 
-# 快速上手
+# 代码示例
 
 - 把 examples/example.emid 转换成 midi 格式并保存到 examples/example.mid
 

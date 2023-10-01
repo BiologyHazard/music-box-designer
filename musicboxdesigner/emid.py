@@ -5,10 +5,23 @@ from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT
-from .utils import mbindex_to_pitch, pitch_to_mbindex
+from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, MUSIC_BOX_30_NOTES_PITCH
 
 TIME_PER_BEAT = 8
+
+
+def pitch_to_mbindex(pitch: int) -> int:
+    try:
+        return 29 - MUSIC_BOX_30_NOTES_PITCH.index(pitch)
+    except ValueError:
+        raise ValueError(f'Pitch {pitch} not in range of 30 notes music box.')
+
+
+def mbindex_to_pitch(mbindex: int) -> int:
+    if mbindex in range(30):
+        return MUSIC_BOX_30_NOTES_PITCH[mbindex]
+    else:
+        raise ValueError('mbindex must be int in range(30)')
 
 
 @dataclass(frozen=True)
@@ -34,6 +47,8 @@ class EmidTrack:
 class EmidFile:
     tracks: list[EmidTrack] = field(default_factory=lambda: [])
     length: int = 1
+
+    file_path: Path | None = None
 
     @classmethod
     def from_str(cls, data: str) -> Self:
@@ -62,10 +77,17 @@ class EmidFile:
 
     @classmethod
     def load_from_file(cls, file: str | bytes | Path | TextIO) -> Self:
-        if isinstance(file, (str, bytes, Path)):
-            with open(file, 'r', encoding='utf-8') as fp:
-                return cls.from_str(fp.read())
-        return cls.from_str(file.read())
+        try:
+            file_path = Path(file)  # type: ignore
+        except Exception:
+            file_path = None
+        if file_path is not None:
+            with open(file_path, 'r', encoding='utf-8') as fp:
+                self: Self = cls.from_str(fp.read())
+        else:
+            self = cls.from_str(file.read())  # type: ignore
+        self.file_path = file_path
+        return self
 
     def update_length(self) -> int:
         '''更新长度并返回更新后的长度'''

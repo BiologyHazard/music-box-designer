@@ -1,24 +1,24 @@
 import logging
 import math
-from bisect import bisect_left
-from dataclasses import dataclass
+from bisect import bisect_right
+from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Self
+from functools import lru_cache
 
-from mido import MidiFile, tick2second
+import mido
+from mido import MidiFile
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import (BaseModel, FilePath, FiniteFloat, NonNegativeFloat,
-                      PositiveFloat, PositiveInt, field_serializer,
-                      field_validator)
+                      PositiveInt, field_serializer, field_validator)
 from pydantic_extra_types.color import Color
 
 from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
                      MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES,
-                     RIGHT_BORDER)
+                     RIGHT_BORDER, MM_PER_INCH)
 from .emid import EmidFile
 from .fmp import FmpBpmTimeSignatureMark, FmpCommentMark, FmpEndMark, FmpFile
-from .utils import (draw_circle, get_text_height, mm_to_pixel, pixel_to_mm,
-                    pos_mm_to_pixel)
 
 default_format: str = '{asctime} [{levelname}] {module} | {message}'
 default_date_format: str = '%Y-%m-%d %H:%M:%S'
@@ -37,13 +37,13 @@ class Note:
 
 class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     # 页面设置
-    anti_alias_rate: PositiveFloat = 1
-    '''抗锯齿比例，设置为`1`以关闭抗锯齿，该数值越大，抗锯齿效果越好，但是算力消耗也越大'''
+    anti_alias: Literal['off', 'fast', 'accurate'] = 'fast'
+    '''抗锯齿等级（仅对音符生效）'''
     ppi: float = 300
     '''图片分辨率，单位像素/英寸'''
     paper_size: tuple[float, float] | None = (210, 297)
     '''页面大小（宽，高），单位毫米，设置为`None`则会使得图片只有一栏并且自动调整大小'''
-    margins: tuple[float, float, float, float] = (6.0, 6.0, 0, 0)
+    margins: tuple[float, float, float, float] = (8.0, 8.0, 0, 0)
     '''页面边距（上，下，左，右），单位毫米'''
     background: Color | Image.Image = Color('white')
     '''背景颜色或图片，可传入`PIL.Image.Image`对象'''
@@ -51,7 +51,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''字体文件路径'''
     heading: str = ''
     '''页面顶部文字'''
-    heading_size: NonNegativeFloat = 3.0
+    heading_size: NonNegativeFloat = 3.5
     '''页面顶部文字大小，单位毫米，将以`round(heading_size * ppi / MM_PER_INCH)`转变为像素大小'''
 
     # 标题设置
@@ -63,7 +63,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''标题对齐方式'''
     title_height: FiniteFloat | None = None
     '''标题到页面上边的距离，单位毫米，设置为`None`则自动'''
-    title_size: NonNegativeFloat = 4.0
+    title_size: NonNegativeFloat = 4.5
     '''标题文字大小，单位毫米，将以`round(title_size * ppi / MM_PER_INCH)`转变为像素大小'''
     show_subtitle: bool = True
     '''是否显示副标题'''
@@ -144,46 +144,48 @@ class ImageList(list[Image.Image]):
             image.save(file_name.format(i+1))
 
 
+@dataclass
 class Draft:
+    notes: list[Note] = field(default_factory=list)
+    title: str = ''
+    subtitle: str = ''
+    music_info: str = ''
+    file_path: Path | None = None
+    bpm: float = 120
+
     INFO_SPACING: float = 1.0
     COLUMN_INFO_SIZE: float = 6.0
-
-    def __init__(self,
-                 notes: list[Note] | None = None,
-                 title: str = '',
-                 subtitle: str = '',
-                 music_info: str = '',
-                 bpm: float = 120,
-                 ) -> None:
-        self.notes: list[Note] = notes if notes is not None else []
-        self.title: str = title
-        self.subtitle: str = subtitle
-        self.music_info: str = music_info
-        self.bpm: float = bpm
 
     @classmethod
     def load_from_file(cls,
                        file: str | Path,
                        transposition: int = 0,
-                       bpm: float | None = None,
                        remove_blank: bool = True,
+                       bpm: float | None = None,
                        ) -> Self:
         logging.info(f'Loading from {file!r}...')
         if not isinstance(file, Path):
-            file = Path(file)
+            try:
+                file = Path(file)
+            except Exception:
+                raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file)}.")
         if file.suffix == '.emid':
-            self: Self = cls.load_from_emid(EmidFile.load_from_file(file),
-                                            transposition=transposition,
-                                            remove_blank=remove_blank,
-                                            bpm=bpm if bpm is not None else DEFAULT_BPM)
-            self.title = self.music_info = file.stem
+            return cls.load_from_emid(EmidFile.load_from_file(file),
+                                      transposition=transposition,
+                                      remove_blank=remove_blank,
+                                      bpm=bpm if bpm is not None else DEFAULT_BPM)
         elif file.suffix == '.fmp':
-            self = cls.load_from_fmp(FmpFile.load_from_file(file))
+            return cls.load_from_fmp(FmpFile.load_from_file(file),
+                                     transposition=transposition,
+                                     remove_blank=remove_blank,
+                                     bpm=bpm)
         elif file.suffix == '.mid':
-            return cls.load_from_midi(MidiFile(file))
+            return cls.load_from_midi(MidiFile(file),
+                                      transposition=transposition,
+                                      remove_blank=remove_blank,
+                                      bpm=bpm)
         else:
-            raise ValueError("The file extension must be '.emid', '.fmp' or '.mid'.")
-        return self
+            raise ValueError(f"The file extension must be '.emid', '.fmp' or '.mid', but got {repr(file.suffix)}.")
 
     @classmethod
     def load_from_emid(cls,
@@ -192,7 +194,12 @@ class Draft:
                        remove_blank: bool = True,
                        bpm: float = DEFAULT_BPM,
                        ) -> Self:
-        self: Self = cls(bpm=bpm)
+        self: Self = cls()
+        if emid_file.file_path is not None:
+            self.title = self.music_info = emid_file.file_path.stem
+            self.file_path = emid_file.file_path
+        self.bpm = bpm
+
         for track in emid_file.tracks:
             for note in track.notes:
                 if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
@@ -201,6 +208,7 @@ class Draft:
                     logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.time / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
+        self.remove_invalid_notes()
         return self
 
     @classmethod
@@ -211,6 +219,11 @@ class Draft:
                       bpm: float | None = None,
                       ) -> Self:
         self: Self = cls()
+        self.title = self.music_info = fmp_file.title
+        self.subtitle = fmp_file.subtitle
+        self.file_path = fmp_file.file_path
+        self.bpm = bpm if bpm is not None else fmp_file.bpm
+
         for track in fmp_file.tracks:
             for note in track.notes:
                 if note.velocity == 0:
@@ -219,11 +232,9 @@ class Draft:
                     self.notes.append(Note(note.pitch + transposition, note.time))
                 else:
                     logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.time / 4) + 1} is out of range')
-        self.bpm = bpm if bpm is not None else fmp_file.bpm
-        self.title = self.music_info = fmp_file.title
-        self.subtitle = fmp_file.subtitle
         if remove_blank:
             self.remove_blank()
+        self.remove_invalid_notes()
         return self
 
     @classmethod
@@ -233,39 +244,24 @@ class Draft:
                        remove_blank: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
+
         self: Self = cls()
         if midi_file.filename is not None:
-            if isinstance(midi_file.filename, (str, Path)):
-                try:
-                    path = Path(midi_file.filename)
-                    stem: str = path.stem
-                    self.title = self.music_info = stem
-                except Exception:
-                    self.title = self.music_info = str(midi_file.filename)
-            else:
-                try:
-                    self.title = self.music_info = str(midi_file.filename)
-                except Exception:
-                    pass
+            try:
+                file_path = Path(midi_file.filename)
+                self.title = self.music_info = file_path.stem
+                self.file_path = file_path
+            except Exception:
+                self.title = self.music_info = str(midi_file.filename)
 
         ticks_per_beat: int = midi_file.ticks_per_beat
 
-        tempo_events: list[tuple[int, int]] = []
-        time_passed: list[float] = []
         if bpm is not None:
-            for track in midi_file.tracks:
-                midi_tick: int = 0
-                for message in track:
-                    midi_tick += message.time
-                    if message.type == 'set_tempo':
-                        tempo_events.append((message.tempo, midi_tick))
-
-            real_time: float = 0.0
-            for i in range(len(tempo_events)):
-                tempo: int = 0 if i == 0 else tempo_events[i-1][0]
-                delta_midi_tick: int = tempo_events[i][1] - tempo_events[i-1][1]
-                real_time += tick2second(delta_midi_tick, ticks_per_beat, tempo)
-                time_passed.append(real_time)
+            self.bpm = bpm
+            tempo_events: list[TempoEvent] = get_tempo_events(midi_file, bpm, ticks_per_beat)
+        else:
+            if (temp := get_midi_bpm(midi_file)) is not None:
+                self.bpm = temp
 
         for track in midi_file.tracks:
             midi_tick: int = 0
@@ -275,23 +271,20 @@ class Draft:
                     continue
                 if message.velocity == 0:
                     continue
-                pitch: int = message.note + transposition
-                if pitch in MUSIC_BOX_30_NOTES_PITCH:
-                    if bpm is None:
-                        time: float = midi_tick / ticks_per_beat
-                    else:
-                        i: int = bisect_left(tempo_events, midi_tick, key=lambda tempo_event: tempo_event[1])
-                        tempo, tick = tempo_events[i]
-                        real_time = time_passed[i] + tick2second(
-                            midi_tick - tick, ticks_per_beat, tempo)
-                        time = real_time / 60 * bpm
-                        self.notes.append(Note(MUSIC_BOX_30_NOTES_PITCH.index(pitch), time))  # 添加note
-                else:  # 如果超出音域
-                    logging.warning(
-                        f'Note {pitch} in bar {math.floor(midi_tick / ticks_per_beat / 4) + 1} is out of range')
+                if bpm is None:
+                    time: float = midi_tick / ticks_per_beat
+                else:
+                    i: int = bisect_right(tempo_events, midi_tick, key=lambda x: x.midi_tick)  # type: ignore
+                    tempo: float = tempo_events[i].tempo  # type: ignore
+                    tick: int = tempo_events[i].midi_tick  # type: ignore
+                    real_time: float = (tempo_events[i].time_passed  # type: ignore
+                                        + mido.tick2second(midi_tick - tick, ticks_per_beat, tempo))
+                    time = real_time / 60 * bpm
+                self.notes.append(Note(message.note + transposition, time))  # 添加note
         self.notes.sort(key=lambda note: note.time)
         if remove_blank:
             self.remove_blank()
+        self.remove_invalid_notes()
         return self
 
     def remove_blank(self) -> None:
@@ -301,10 +294,26 @@ class Draft:
         blank: int = math.floor(self.notes[0].time)
         self.notes = [Note(note.pitch, note.time - blank) for note in self.notes]
 
+    def remove_invalid_notes(self) -> None:
+        self.notes.sort(key=lambda note: note.time)
+        latest_time = defaultdict(lambda: -MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT)
+        new_notes: list[Note] = []
+        for note in self.notes:
+            if note.pitch not in MUSIC_BOX_30_NOTES_PITCH:
+                logging.warning(f'Note {note.pitch} in bar {math.floor(note.time / 4) + 1} is out of range')
+                continue
+            if note.time < latest_time[note.pitch] + MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT:
+                logging.warning(f'Too Near! Note {note.pitch} in bar {math.floor(note.time / 4) + 1}, SKIPPING!')
+                continue
+            new_notes.append(note)
+            latest_time[note.pitch] = note.time
+        self.notes = new_notes
+
     def export_pics(self,
                     title: str | None = None,
                     subtitle: str | None = None,
                     music_info: str | None = None,
+                    show_bpm: float | None = None,
                     settings: DraftSettings | None = None,
                     scale: float = 1,
                     ) -> ImageList:
@@ -314,6 +323,8 @@ class Draft:
             subtitle = self.subtitle
         if music_info is None:
             music_info = self.music_info
+        if show_bpm is None:
+            show_bpm = self.bpm
         if settings is None:
             settings = DraftSettings()
 
@@ -323,6 +334,7 @@ class Draft:
         else:
             length = 0
 
+        # 计算各元素坐标
         up_margin, down_margin, left_margin, right_margin = settings.margins
         y: float = up_margin
         if settings.show_info:
@@ -347,27 +359,27 @@ class Draft:
                     str(settings.font_path), round(mm_to_pixel(settings.tempo_note_count_size, settings.ppi)))
                 if settings.show_tempo:
                     try:
-                        tempo_text: str = settings.tempo_format.format(bpm=self.bpm)
-                    except Exception:
-                        tempo_text = '{bpm:.0f}bpm'.format(bpm=self.bpm)
+                        tempo_text: str = settings.tempo_format.format(bpm=show_bpm)
+                    except Exception as e:
+                        logging.warning(f'Cannot format tempo: {e!r}')
+                        logging.warning("Falling back to default tempo format '{bpm:.0f}bpm'.")
+                        tempo_text = '{bpm:.0f}bpm'.format(bpm=show_bpm)
                 else:
                     tempo_text = ''
 
                 if settings.show_note_count:
+                    format_dict = dict(
+                        note_count=len(self.notes),
+                        meter=length / 1000,
+                        centimeter=length / 100,
+                        milimeter=length,
+                    )
                     try:
-                        note_count_text: str = settings.note_count_format.format(
-                            note_count=len(self.notes),
-                            meter=length / 1000,
-                            centimeter=length / 100,
-                            milimeter=length
-                        )
-                    except Exception:
-                        note_count_text = '{note_count} notes / {meter:.2f}m'.format(
-                            note_count=len(self.notes),
-                            meter=length / 1000,
-                            centimeter=length / 100,
-                            milimeter=length
-                        )
+                        note_count_text: str = settings.note_count_format.format(**format_dict)
+                    except Exception as e:
+                        logging.warning(f'Cannot format note count: {e!r}')
+                        logging.warning("Falling back to default note count format '{note_count} notes / {meter:.2f}m'.")
+                        note_count_text = '{note_count} notes / {meter:.2f}m'.format(**format_dict)
                 else:
                     note_count_text = ''
 
@@ -426,8 +438,12 @@ class Draft:
         for i, draw in enumerate(draws):
             num: int = cols_per_page if i != pages - 1 else last_page_cols
             for j in range(num + 1):
-                draw.line((pos_mm_to_pixel((first_col_x + j * COL_WIDTH, up_margin), settings.ppi),
-                           pos_mm_to_pixel((first_col_x + j * COL_WIDTH, page_height - down_margin), settings.ppi)),
+                draw.line((pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
+                                            up_margin),
+                                           settings.ppi, True),
+                           pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
+                                            page_height - down_margin),
+                                           settings.ppi, True)),
                           'black', 1)
 
         # 页眉
@@ -436,7 +452,7 @@ class Draft:
             heading_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.heading_size, settings.ppi)))
             for draw in draws:
-                draw.text(pos_mm_to_pixel((page_width / 2, up_margin), settings.ppi),
+                draw.text(pos_mm_to_pixel((page_width / 2, up_margin - Draft.INFO_SPACING), settings.ppi),
                           settings.heading, 'black', heading_font, 'md')
 
         if settings.show_info:
@@ -490,54 +506,6 @@ class Draft:
                                                   settings.ppi),
                                   note_count_text, 'black', tempo_note_count_font, 'rd')  # type: ignore
 
-        logging.debug('Drawing lines...')
-        for page, draw in enumerate(draws):
-            for col in range(cols_per_page):
-                if page == pages - 1 and col >= last_page_cols:
-                    continue
-                if page == 0 and col == 0:
-                    current_col_y: float = body_y
-                    current_col_rows: int = first_col_rows
-                else:
-                    current_col_y = first_row_y
-                    current_col_rows = rows_per_col
-                # 整拍横线
-                for row in range(current_col_rows + 1):
-                    draw.line(
-                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
-                                          current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi),
-                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                          current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi)),
-                        settings.whole_beat_line_color.as_hex(), 1,
-                    )
-                # 半拍横线
-                for row in range(current_col_rows + 1):
-                    if settings.half_beat_line_type == 'solid':
-                        draw.line(
-                            (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
-                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                             settings.ppi),
-                             pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                             settings.ppi)),
-                            settings.half_beat_line_color.as_hex(), 1,
-                        )
-                    else:
-                        raise NotImplementedError
-                # 竖线
-                for line in range(NOTES):
-                    draw.line(
-                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
-                                          current_col_y),
-                                         settings.ppi),
-                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
-                                          current_col_y + current_col_rows * LENGTH_MM_PER_BEAT),
-                                         settings.ppi)),
-                        settings.vertical_line_color.as_hex(), 1,
-                    )
-
         # music_info以及栏号
         if settings.show_column_info:
             logging.debug('Drawing column info...')
@@ -555,10 +523,59 @@ class Draft:
                             settings.ppi,
                         ), char, '#00000080', column_info_font, 'mm')
 
+        logging.debug('Drawing lines...')
+        for page, draw in enumerate(draws):
+            for col in range(cols_per_page):
+                if page == pages - 1 and col >= last_page_cols:
+                    continue
+                if page == 0 and col == 0:
+                    current_col_y: float = body_y
+                    current_col_rows: int = first_col_rows
+                else:
+                    current_col_y = first_row_y
+                    current_col_rows = rows_per_col
+                # 整拍横线
+                for row in range(current_col_rows + 1):
+                    draw.line(
+                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
+                                          current_col_y + row * LENGTH_MM_PER_BEAT),
+                                         settings.ppi, True),
+                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
+                                          current_col_y + row * LENGTH_MM_PER_BEAT),
+                                         settings.ppi, True)),
+                        settings.whole_beat_line_color.as_hex(), 1,
+                    )
+                # 半拍横线
+                for row in range(current_col_rows):
+                    if settings.half_beat_line_type == 'solid':
+                        draw.line(
+                            (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
+                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                             settings.ppi, True),
+                             pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
+                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                             settings.ppi, True)),
+                            settings.half_beat_line_color.as_hex(), 1,
+                        )
+                    else:
+                        raise NotImplementedError
+                # 竖线
+                for line in range(NOTES):
+                    draw.line(
+                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
+                                          current_col_y),
+                                         settings.ppi, True),
+                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
+                                          current_col_y + current_col_rows * LENGTH_MM_PER_BEAT),
+                                         settings.ppi, True)),
+                        settings.vertical_line_color.as_hex(), 1,
+                    )
+
         if settings.show_bar_num:
             logging.debug('Drawing bar nums...')
             raise NotImplementedError
 
+        # 音符
         logging.debug('Drawing notes...')
         for note in self.notes:
             try:
@@ -570,15 +587,16 @@ class Draft:
             page: int = col // cols_per_page
             col_in_page: int = col % cols_per_page
             current_col_y: float = body_y if col == 0 else first_row_y
-            row_in_col: float = (note.time * scale) % rows_per_col
+            row_in_col: float = (note.time * scale
+                                 if col == 0 else
+                                 (note.time * scale - first_col_rows + rows_per_col) % rows_per_col)
             draw_circle(
-                draws[page],
-                pos_mm_to_pixel(
-                    (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + index * GRID_WIDTH,
-                     current_col_y + row_in_col * LENGTH_MM_PER_BEAT),
-                    settings.ppi * settings.anti_alias_rate),
-                mm_to_pixel(settings.note_radius, settings.ppi * settings.anti_alias_rate),
+                images[page],
+                (mm_to_pixel(first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + index * GRID_WIDTH, settings.ppi),
+                 mm_to_pixel(current_col_y + row_in_col * LENGTH_MM_PER_BEAT, settings.ppi)),
+                mm_to_pixel(settings.note_radius, settings.ppi),
                 settings.note_color.as_hex(),
+                anti_alias=settings.anti_alias,
             )
 
         if isinstance(settings.background, Image.Image):
@@ -590,3 +608,147 @@ class Draft:
         image_list = ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
         image_list.file_name = f'{title}_{{}}.png'
         return image_list
+
+
+@dataclass
+class TempoEvent:
+    midi_tick: int
+    tempo: float
+    time_passed: float
+
+
+def get_tempo_events(midi_file: MidiFile, bpm: float, ticks_per_beat: int) -> list[TempoEvent]:
+    tempo_events: list[TempoEvent] = [TempoEvent(0, mido.bpm2tempo(bpm), 0)]
+    for track in midi_file.tracks:
+        midi_tick: int = 0
+        for message in track:
+            midi_tick += message.time
+            if message.type == 'set_tempo':
+                tempo_events.append(TempoEvent(midi_tick, message.tempo, 0))
+
+    tempo_events.sort(key=lambda x: x.midi_tick)
+
+    time_passed: float = 0.0
+    for i in range(1, len(tempo_events)):
+        tempo: float = tempo_events[i-1].tempo
+        delta_midi_tick: int = tempo_events[i].midi_tick - tempo_events[i-1].midi_tick
+        time_passed += mido.tick2second(delta_midi_tick, ticks_per_beat, tempo)
+        tempo_events[i].time_passed = time_passed
+    return tempo_events
+
+
+def get_midi_bpm(midi_file: MidiFile) -> float | None:
+    for track in midi_file.tracks:
+        for message in track:
+            if message.type == 'set_tempo':
+                return mido.tempo2bpm(message.tempo)
+
+
+def mm_to_pixel(x: float, /, ppi: float) -> float:
+    return x / MM_PER_INCH * ppi
+
+
+def pixel_to_mm(x: float, /, ppi: float) -> float:
+    return x * MM_PER_INCH / ppi
+
+
+def pos_mm_to_pixel(pos: tuple[float, float], /, ppi: float, minus_a_half: bool = False) -> tuple[int, int]:
+    x, y = pos
+    if minus_a_half:
+        return (math.floor(mm_to_pixel(x, ppi)), math.floor(mm_to_pixel(y, ppi)))
+    else:
+        return (round(mm_to_pixel(x, ppi)), round(mm_to_pixel(y, ppi)))
+
+
+@lru_cache
+def get_empty_draw() -> ImageDraw.ImageDraw:
+    return ImageDraw.Draw(Image.new('RGBA', (0, 0)))
+
+
+def get_text_height(text: str, font: ImageFont.FreeTypeFont, **kwargs) -> int:
+    return (
+        get_empty_draw().multiline_textbbox((0, 0), text, font, 'la', **kwargs)[3]
+        - get_empty_draw().multiline_textbbox((0, 0), text, font, 'ld', **kwargs)[3]
+    )
+
+
+def calc_alpha(radius: float, distance: float) -> float:
+    if distance <= radius - 1/2:
+        return 1
+    if distance >= radius + 1/2:
+        return 0
+    return radius + 1/2 - distance
+
+
+def mix_number(foreground: float, background: float, alpha: float) -> float:
+    return foreground * alpha + background * (1 - alpha)
+
+
+# def mix_tuple(foreground: tuple[float, ...], background: tuple[float, ...], alpha: float) -> tuple[float, ...]:
+#     assert len(foreground) == len(background), ValueError('foreground and background must have same length.')
+#     return tuple(mix_number(x, y, alpha) for x, y in zip(foreground, background))
+
+# def round_tuple(x: tuple[float, ...], /) -> tuple[int, ...]:
+#     return tuple(round(y) for y in x)
+
+
+def _get_circle_image(mode, center: tuple[float, float], radius: float, color) -> tuple[Image.Image, tuple[int, int]]:
+    center_x, center_y = center
+    left_x: int = math.floor(center_x - radius)
+    right_x: int = math.ceil(center_x + radius)
+    top_y: int = math.floor(center_y - radius)
+    bottom_y: int = math.ceil(center_y + radius)
+    mask_width: int = right_x - left_x
+    mask_height: int = bottom_y - top_y
+    center_in_mask_x: float = center_x - left_x
+    center_in_mask_y: float = center_y - top_y
+    mask: Image.Image = Image.new('L', (mask_width, mask_height), 255)
+    draw: ImageDraw.ImageDraw = ImageDraw.Draw(mask)
+    for x in range(mask_width):
+        for y in range(mask_height):
+            distance: float = math.dist((center_in_mask_x, center_in_mask_y), (x + 1/2, y + 1/2))
+            alpha: float = calc_alpha(radius, distance)
+            mask_color: float = mix_number(0, 255, alpha)
+            draw.point((x, y), round(mask_color))
+    return (Image.composite(Image.new(mode, (mask_width, mask_height)),
+                            Image.new(mode, (mask_width, mask_height), color),
+                            mask),
+            (left_x, top_y))
+
+
+@lru_cache
+def _get_circle_image_with_cache(*args, **kwargs):
+    return _get_circle_image(*args, **kwargs)
+
+
+def get_circle_image(mode, center: tuple[float, float], radius: float, color) -> tuple[Image.Image, tuple[int, int]]:
+    if center == (1/2, 1/2):
+        return _get_circle_image_with_cache(mode, center, radius, color)
+    else:
+        return _get_circle_image(mode, center, radius, color)
+
+
+def draw_circle(image: Image.Image,
+                center: tuple[float, float],
+                radius: float,
+                color,
+                anti_alias: Literal['off', 'fast', 'accurate'] = 'fast') -> None:
+    if anti_alias == 'off':
+        draw = ImageDraw.Draw(image)
+        x, y = center
+        xy: tuple[tuple[int, int], tuple[int, int]] = ((round(x - radius), round(y - radius)),
+                                                       (round(x + radius), round(y + radius)))
+        draw.ellipse(xy, color, width=0)
+
+    elif anti_alias == 'fast':
+        center_x, center_y = center
+        circle_image, destination = get_circle_image(image.mode, (1/2, 1/2), radius, color)
+        delta_x, delta_y = destination
+        image.alpha_composite(circle_image, (math.floor(center_x) + delta_x, math.floor(center_y) + delta_y))
+
+    elif anti_alias == 'accurate':
+        circle_image, destination = get_circle_image(image.mode, center, radius, color)
+        image.alpha_composite(circle_image, destination)
+
+    else:
+        raise ValueError

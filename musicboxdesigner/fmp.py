@@ -1,13 +1,12 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, BinaryIO, Self
+from typing import Any, BinaryIO, Literal, Self
 
 from mido import (Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo,
                   tempo2bpm)
 
 from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT
-from .utils import read_bool, read_int
 
 FMP_TRANSPOSITION = -7
 
@@ -85,19 +84,27 @@ class FmpFile:
     title: str = ''
     subtitle: str = ''
     comment: str = ''
-    tracks: list[FmpTrack] = field(default_factory=lambda: [])
-    time_marks: list[FmpTimeMark] = field(default_factory=lambda: [])
-    channels: list[FmpChannel] = field(default_factory=lambda: [])
-    dgprogram_cfg: dict[str, Any] = field(default_factory=lambda: {})
-    dgstyle_cfg: dict[str, Any] = field(default_factory=lambda: {})
+    tracks: list[FmpTrack] = field(default_factory=list)
+    time_marks: list[FmpTimeMark] = field(default_factory=list)
+    channels: list[FmpChannel] = field(default_factory=list)
+    dgprogram_cfg: dict[str, Any] = field(default_factory=dict)
+    dgstyle_cfg: dict[str, Any] = field(default_factory=dict)
+
+    file_path: Path | None = None
 
     @classmethod
     def load_from_file(cls, file: str | bytes | Path | BinaryIO) -> Self:
-        if isinstance(file, (str, bytes, Path)):
-            with open(file, 'rb') as fp:
-                return cls._load_from_file(fp)
+        try:
+            file_path = Path(file)  # type: ignore
+        except Exception:
+            file_path = None
+        if file_path is not None:
+            with open(file_path, 'rb') as fp:
+                self: Self = cls._load_from_file(fp)
         else:
-            return cls._load_from_file(file)
+            self = cls._load_from_file(file)  # type: ignore
+        self.file_path = file_path
+        return self
 
     @classmethod
     def _load_from_file(cls, file: BinaryIO) -> Self:
@@ -343,3 +350,19 @@ class FmpFile:
     def set_velocity(self, velocity: float) -> None:
         for track in self.tracks:
             track.set_velocity(velocity)
+
+
+def read_int(file: BinaryIO,
+             /,
+             byte: int = 1,
+             byteorder: Literal['big', 'little'] = 'little',
+             signed: bool = False) -> int:
+    return int.from_bytes(file.read(byte), byteorder, signed=signed)
+
+
+def read_bool(file: BinaryIO) -> bool:
+    b: bytes = file.read(1)
+    i: int = int.from_bytes(b)
+    if i not in (0, 1):
+        raise ValueError(f'Read value {repr(b)} is not a bool.')
+    return bool(i)
