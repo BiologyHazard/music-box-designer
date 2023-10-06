@@ -141,19 +141,20 @@ class FmpFile:
         # 工程信息
         assert file.read(3) == b'sio'
         fmp_file.show_info_on_open = read_bool(file)
-        for i in range(num):
+        for _ in range(num):
             type_length: int = read_int(file, 1)
             info_length: int = read_int(file, 2) - 1
             assert file.read(1) == b'\x00'
             info_type: str = file.read(type_length).decode()
-            if info_type == 'ti':
-                fmp_file.title = file.read(info_length).decode()
-            elif info_type == 'sti':
-                fmp_file.subtitle = file.read(info_length).decode()
-            elif info_type == 'cmt':
-                fmp_file.comment = file.read(info_length).decode()
-            else:
-                raise ValueError
+            match info_type:
+                case 'ti':
+                    fmp_file.title = file.read(info_length).decode()
+                case 'sti':
+                    fmp_file.subtitle = file.read(info_length).decode()
+                case 'cmt':
+                    fmp_file.comment = file.read(info_length).decode()
+                case _:
+                    raise ValueError
             assert file.read(1) == b'\x00'
 
         # 轨道
@@ -204,32 +205,33 @@ class FmpFile:
         time_mark_count: int = read_int(file, 4)
         for _ in range(time_mark_count):
             mark_type: int = read_int(file, 1)
-            if mark_type == 1:  # bpm / 节拍标记
-                time_mark = FmpBpmTimeSignatureMark()
-                assert file.read(2) == '\x0E\x00'
-                tick = read_int(file, 4)
-                time_mark.time = tick / fmp_file.ticks_per_beat
-                time_mark.change_tempo = read_bool(file)
-                tempo = read_int(file, 4)
-                time_mark.bpm = tempo2bpm(tempo)
-                time_mark.change_time_signature = read_bool(file)
-                numerator = read_int(file, 2)
-                denominator = read_int(file, 2)
-                time_mark.time_signature = (numerator, denominator)
-            elif mark_type == 2:  # 注释
-                time_mark = FmpCommentMark()
-                comment_length_add_6: int = read_int(file, 2)
-                tick = read_int(file, 4)
-                time_mark.time = tick / fmp_file.ticks_per_beat
-                comment_length: int = read_int(file, 2)
-                assert comment_length_add_6 == comment_length + 6
-                time_mark.comment = file.read(comment_length).decode()
-            elif mark_type == 3:  # 结束标记
-                time_mark = FmpEndMark()
-                tick = read_int(file, 4)
-                time_mark.time = tick / fmp_file.ticks_per_beat
-            else:
-                raise ValueError
+            match mark_type:
+                case 1:  # bpm / 节拍标记
+                    time_mark = FmpBpmTimeSignatureMark()
+                    assert file.read(2) == '\x0E\x00'
+                    tick = read_int(file, 4)
+                    time_mark.time = tick / fmp_file.ticks_per_beat
+                    time_mark.change_tempo = read_bool(file)
+                    tempo = read_int(file, 4)
+                    time_mark.bpm = tempo2bpm(tempo)
+                    time_mark.change_time_signature = read_bool(file)
+                    numerator = read_int(file, 2)
+                    denominator = read_int(file, 2)
+                    time_mark.time_signature = (numerator, denominator)
+                case 2:  # 注释
+                    time_mark = FmpCommentMark()
+                    comment_length_add_6: int = read_int(file, 2)
+                    tick = read_int(file, 4)
+                    time_mark.time = tick / fmp_file.ticks_per_beat
+                    comment_length: int = read_int(file, 2)
+                    assert comment_length_add_6 == comment_length + 6
+                    time_mark.comment = file.read(comment_length).decode()
+                case 3:  # 结束标记
+                    time_mark = FmpEndMark()
+                    tick = read_int(file, 4)
+                    time_mark.time = tick / fmp_file.ticks_per_beat
+                case _:
+                    raise ValueError
             fmp_file.time_marks.append(time_mark)
 
         # 通道
@@ -339,7 +341,7 @@ class FmpFile:
         for midi_track in midi_file.tracks:
             midi_tick: int = 0
             for message in midi_track:
-                message.time -= midi_tick
+                message.time -= midi_tick  # 整型的，不用在意精度
                 midi_tick += message.time  # a bit tricky, try to understand.
 
         for midi_track in midi_file.tracks:

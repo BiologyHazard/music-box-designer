@@ -1,10 +1,13 @@
+<div align="center">
+
 # MusicBoxDesigner
+
 [![License](https://img.shields.io/github/license/BiologyHazard/MusicBoxDesigner?style=flat-square)](https://github.com/BiologyHazard/MusicBoxDesigner/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/release/BiologyHazard/MusicBoxDesigner?style=flat-square)](https://github.com/Mrs4s/go-cqhttp/releases)
 
+</div>
 
 主要功能
-
 - .mid, .emid, .fmp 文件之间互相转换
 - 生成纸带设计稿图片
 
@@ -21,10 +24,12 @@ FairyMusicBox 官网：http://www.fairymusicbox.com/
 
 FairyMusicBox 3.0.0 实现了本程序的几乎全部功能。如果您只是想进行一些基本的操作（生成纸带设计稿等），建议使用 FairyMusicBox。
 
+FairyMusicBox 生成的纸带设计稿是 PDF 格式的，更便于阅读和打印。
+
 
 # 安装
 
-1. 安装 Python（3.9及以上）
+1. 安装 Python（3.10及以上）
 
     - Windows 系统
 
@@ -32,9 +37,9 @@ FairyMusicBox 3.0.0 实现了本程序的几乎全部功能。如果您只是想
         ```
         python --version
         ```
-        检查 Python 版本是否大于等于 3.9。如果报错或者版本过低，您需要按照下面的方法安装 Python。
+        检查 Python 版本是否大于等于 3.10。如果报错或者版本过低，您需要按照下面的方法安装 Python。
 
-        > 请自行前往 https://www.python.org/ 下载 Python（3.9及以上）并将 Python 添加到环境变量（在安装过程中勾选 "Add Python to system PATH"）。
+        > 请自行前往 https://www.python.org/ 下载 Python（3.10及以上）并将 Python 添加到环境变量（在安装过程中勾选 "Add Python to system PATH"）。
 
         > 对大多数用户来说，您应该下载 Windows installer (64-bit)。
 
@@ -120,7 +125,9 @@ FairyMusicBox 3.0.0 实现了本程序的几乎全部功能。如果您只是想
 - 自定义水印
 - 显示小节号
 - 更多的快捷方法以及批处理方法
-- 用户友好的README
+- 用户友好的 README
 - 自动打包
+- main.py
+- 支持 fmp 标记
 
 祝使用愉快！

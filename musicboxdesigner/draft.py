@@ -1,11 +1,12 @@
 import logging
 import math
+import re
 from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
-from functools import lru_cache
 
 import mido
 from mido import MidiFile
@@ -15,8 +16,8 @@ from pydantic import (BaseModel, FilePath, FiniteFloat, NonNegativeFloat,
 from pydantic_extra_types.color import Color
 
 from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
-                     MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES,
-                     RIGHT_BORDER, MM_PER_INCH)
+                     MIN_TRIGGER_SPACING, MM_PER_INCH,
+                     MUSIC_BOX_30_NOTES_PITCH, NOTES, RIGHT_BORDER)
 from .emid import EmidFile
 from .fmp import FmpBpmTimeSignatureMark, FmpCommentMark, FmpEndMark, FmpFile
 
@@ -53,6 +54,10 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''页面顶部文字'''
     heading_size: NonNegativeFloat = 3.5
     '''页面顶部文字大小，单位毫米，将以`round(heading_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    heading_color: Color = Color('black')
+    '''页面顶部文字颜色'''
+    separating_line_color: Color = Color('black')
+    '''分隔线颜色'''
 
     # 标题设置
     show_info: bool = True
@@ -65,6 +70,8 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''标题到页面上边的距离，单位毫米，设置为`None`则自动'''
     title_size: NonNegativeFloat = 4.5
     '''标题文字大小，单位毫米，将以`round(title_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    title_color: Color = Color('black')
+    '''标题颜色'''
     show_subtitle: bool = True
     '''是否显示副标题'''
     subtitle_align: Literal['left', 'center', 'right'] = 'center'
@@ -73,6 +80,8 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''副标题到页面上边的距离，单位毫米，设置为`None`则自动'''
     subtitle_size: NonNegativeFloat = 3.0
     '''副标题文字大小，单位毫米，将以`round(subtitle_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    subtitle_color: Color = Color('black')
+    '''副标题颜色'''
     show_tempo: bool = True
     '''是否显示乐曲速度信息'''
     tempo_format: str = '{bpm:.0f}bpm'
@@ -83,6 +92,8 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''音符数量和纸带长度信息的格式化字符串，支持参数`note_count`, `meter`, `centimeter`和`milimeter`'''
     tempo_note_count_size: NonNegativeFloat = 3.0
     '''乐曲速度信息、音符数量和纸带长度信息文字大小，单位毫米，将以`round(tempo_note_count_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    tempo_note_count_color: Color = Color('black')
+    '''乐曲速度信息、音符数量和纸带长度信息颜色'''
 
     # 谱面设置
     body_height: FiniteFloat | None = None
@@ -93,16 +104,26 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''音符半径，单位毫米'''
     show_column_info: bool = True
     '''是否在每栏右上角显示`music_info`以及栏号'''
+    column_info_size: NonNegativeFloat = 6.0
+    '''栏信息文字大小，单位毫米，将以`round(column_info_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    column_info_color: Color = Color('#00000080')
+    '''栏信息颜色'''
     show_bar_num: bool = True
     '''是否显示小节号'''
-    beats_per_bar_override: PositiveInt | None = None
+    beats_per_bar: PositiveInt | None = None
     '''每小节多少拍，设置为`None`则从文件中读取，读取不到则认为每小节4拍'''
     bar_num_start: int = 1
     '''小节号从几开始'''
+    bar_num_size: NonNegativeFloat = 3.0
+    '''小节号文字大小，单位毫米，将以`round(bar_num_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    bar_num_color: Color = Color('black')
+    '''小节号颜色'''
     show_custom_watermark: bool = False
     '''是否显示自定义水印'''
     custom_watermark: str = '自定义水印'
     '''自定义水印内容'''
+    custom_watermark_color: Color = Color('#00000060')
+    '''自定义水印颜色'''
     whole_beat_line_color: Color = Color('black')
     '''整拍线条颜色'''
     half_beat_line_type: Literal['solid', 'dashed'] = 'solid'
@@ -136,12 +157,16 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
 class ImageList(list[Image.Image]):
     file_name: str
 
-    def save(self, file_name: str | None = None) -> None:
+    def save(self, file_name: str | None = None, overwrite: bool = False) -> None:
         if file_name is None:
             file_name = self.file_name
         for i, image in enumerate(self):
-            logging.info(f'Saving image {i+1} of {len(self)}...')
-            image.save(file_name.format(i+1))
+            if overwrite:
+                path_to_save = Path(file_name.format(i+1))
+            else:
+                path_to_save: Path = find_available_filename(file_name.format(i+1))
+            logging.info(f'Saving image {i+1} of {len(self)} to {path_to_save.as_posix()!r}...')
+            image.save(path_to_save)
 
 
 @dataclass
@@ -154,7 +179,6 @@ class Draft:
     bpm: float = 120
 
     INFO_SPACING: float = 1.0
-    COLUMN_INFO_SIZE: float = 6.0
 
     @classmethod
     def load_from_file(cls,
@@ -274,7 +298,7 @@ class Draft:
                 if bpm is None:
                     time: float = midi_tick / ticks_per_beat
                 else:
-                    i: int = bisect_right(tempo_events, midi_tick, key=lambda x: x.midi_tick)  # type: ignore
+                    i: int = bisect_right(tempo_events, midi_tick, key=lambda x: x.midi_tick) - 1  # type: ignore
                     tempo: float = tempo_events[i].tempo  # type: ignore
                     tick: int = tempo_events[i].midi_tick  # type: ignore
                     real_time: float = (tempo_events[i].time_passed  # type: ignore
@@ -317,6 +341,8 @@ class Draft:
                     settings: DraftSettings | None = None,
                     scale: float = 1,
                     ) -> ImageList:
+        # 由于在一拍当中插入时间标记会导致网格的错乱，故暂时不支持在乐曲中间更改时间标记。
+        # TODO: 寻找更好的解决办法。
         if title is None:
             title = self.title
         if subtitle is None:
@@ -444,7 +470,7 @@ class Draft:
                            pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
                                             page_height - down_margin),
                                            settings.ppi, True)),
-                          'black', 1)
+                          settings.separating_line_color.as_hex(), 1)
 
         # 页眉
         if settings.heading:
@@ -510,25 +536,47 @@ class Draft:
         if settings.show_column_info:
             logging.debug('Drawing column info...')
             column_info_font: ImageFont.FreeTypeFont = ImageFont.truetype(
-                str(settings.font_path), round(mm_to_pixel(Draft.COLUMN_INFO_SIZE, settings.ppi)))
+                str(settings.font_path), round(mm_to_pixel(settings.column_info_size, settings.ppi)))
             for page, draw in enumerate(draws):
-                for col in range(cols_per_page):
-                    if page == pages - 1 and col >= last_page_cols:
+                for col_in_page in range(cols_per_page):
+                    if page == pages - 1 and col_in_page >= last_page_cols:
                         continue
-                    current_col_y = body_y if page == 0 and col == 0 else first_row_y
-                    for i, char in enumerate(f'{music_info}{page * cols_per_page + col + 1}'):
+                    current_col_y = body_y if page == 0 and col_in_page == 0 else first_row_y
+                    for i, char in enumerate(f'{music_info}{page * cols_per_page + col_in_page + 1}'):
                         draw.text(pos_mm_to_pixel(
-                            (first_col_x + (col + 1) * COL_WIDTH - RIGHT_BORDER - LENGTH_MM_PER_BEAT / 2,
+                            (first_col_x + (col_in_page + 1) * COL_WIDTH - RIGHT_BORDER - LENGTH_MM_PER_BEAT / 2,
                              current_col_y + (i + 1/2) * LENGTH_MM_PER_BEAT),
                             settings.ppi,
-                        ), char, '#00000080', column_info_font, 'mm')
+                        ), char, settings.column_info_color.as_hex(), column_info_font, 'mm')
+
+        # 栏下方页码
+        logging.debug('Drawing page nums...')
+        page_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
+            str(settings.font_path), round(mm_to_pixel(3.0, settings.ppi)))
+        for page, draw in enumerate(draws):
+            for col_in_page in range(cols_per_page):
+                col = page * cols_per_page + col_in_page
+                if col >= cols:
+                    continue
+                if col == 0:
+                    current_col_top_y: float = body_y
+                    current_col_rows: int = first_col_rows
+                else:
+                    current_col_top_y = first_row_y
+                    current_col_rows = rows_per_col
+                current_col_bottom_y: float = current_col_top_y + current_col_rows * LENGTH_MM_PER_BEAT
+                draw.text(pos_mm_to_pixel(
+                    (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
+                     current_col_bottom_y),
+                    settings.ppi,
+                ), f'{col+1}', 'black', page_num_font, 'la')
 
         logging.debug('Drawing lines...')
         for page, draw in enumerate(draws):
-            for col in range(cols_per_page):
-                if page == pages - 1 and col >= last_page_cols:
+            for col_in_page in range(cols_per_page):
+                if page == pages - 1 and col_in_page >= last_page_cols:
                     continue
-                if page == 0 and col == 0:
+                if page == 0 and col_in_page == 0:
                     current_col_y: float = body_y
                     current_col_rows: int = first_col_rows
                 else:
@@ -537,35 +585,60 @@ class Draft:
                 # 整拍横线
                 for row in range(current_col_rows + 1):
                     draw.line(
-                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
+                        (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
                                           current_col_y + row * LENGTH_MM_PER_BEAT),
                                          settings.ppi, True),
-                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
+                         pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
                                           current_col_y + row * LENGTH_MM_PER_BEAT),
                                          settings.ppi, True)),
                         settings.whole_beat_line_color.as_hex(), 1,
                     )
                 # 半拍横线
                 for row in range(current_col_rows):
-                    if settings.half_beat_line_type == 'solid':
-                        draw.line(
-                            (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER,
-                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                             settings.ppi, True),
-                             pos_mm_to_pixel((first_col_x + col * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                              current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                             settings.ppi, True)),
-                            settings.half_beat_line_color.as_hex(), 1,
-                        )
-                    else:
-                        raise NotImplementedError
+                    match settings.half_beat_line_type:
+                        case 'solid':
+                            draw.line(
+                                (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
+                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                 settings.ppi, True),
+                                 pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
+                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                 settings.ppi, True)),
+                                settings.half_beat_line_color.as_hex(), 1,
+                            )
+                        case 'dashed':
+                            for part in range(6):
+                                draw.line(
+                                    (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
+                                                      + (part * 5) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, True),
+                                     pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
+                                                      + (part * 5 + 1 + 1/2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, True)),
+                                    settings.half_beat_line_color.as_hex(), 1,
+                                )
+                                draw.line(
+                                    (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
+                                                      + (part * 5 + 2 + 1/2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, True),
+                                     pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
+                                                      + (part * 5 + 4) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, True)),
+                                    settings.half_beat_line_color.as_hex(), 1,
+                                )
+                        case _:
+                            raise ValueError
                 # 竖线
                 for line in range(NOTES):
                     draw.line(
-                        (pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
+                        (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
                                           current_col_y),
                                          settings.ppi, True),
-                         pos_mm_to_pixel((first_col_x + col * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
+                         pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
                                           current_col_y + current_col_rows * LENGTH_MM_PER_BEAT),
                                          settings.ppi, True)),
                         settings.vertical_line_color.as_hex(), 1,
@@ -606,8 +679,26 @@ class Draft:
 
         logging.info('Compositing images...')
         image_list = ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
-        image_list.file_name = f'{title}_{{}}.png'
+        if self.file_path is None:
+            image_list.file_name = make_valid_filename(f'{title}_{{}}.png')
+        else:
+            image_list.file_name = (self.file_path.parent / f'{self.file_path.stem}_{{}}.png').as_posix()
         return image_list
+
+
+def make_valid_filename(s) -> str:
+    return re.sub(r'[\/:*?"<>|]', '_', s)
+
+
+def find_available_filename(path: str | Path) -> Path:
+    path = Path(path)
+    if path.exists():
+        i = 1
+        while (new_path := path.with_name(f'{path.stem} ({i}){path.suffix}')).exists():
+            i += 1
+        return new_path
+    else:
+        return path
 
 
 @dataclass
@@ -652,7 +743,7 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
     return x * MM_PER_INCH / ppi
 
 
-def pos_mm_to_pixel(pos: tuple[float, float], /, ppi: float, minus_a_half: bool = False) -> tuple[int, int]:
+def pos_mm_to_pixel(pos: tuple[float, float], ppi: float, minus_a_half: bool = False) -> tuple[int, int]:
     x, y = pos
     if minus_a_half:
         return (math.floor(mm_to_pixel(x, ppi)), math.floor(mm_to_pixel(y, ppi)))
@@ -717,7 +808,7 @@ def _get_circle_image(mode, center: tuple[float, float], radius: float, color) -
 
 
 @lru_cache
-def _get_circle_image_with_cache(*args, **kwargs):
+def _get_circle_image_with_cache(*args, **kwargs) -> tuple[Image.Image, tuple[int, int]]:
     return _get_circle_image(*args, **kwargs)
 
 
@@ -733,22 +824,23 @@ def draw_circle(image: Image.Image,
                 radius: float,
                 color,
                 anti_alias: Literal['off', 'fast', 'accurate'] = 'fast') -> None:
-    if anti_alias == 'off':
-        draw = ImageDraw.Draw(image)
-        x, y = center
-        xy: tuple[tuple[int, int], tuple[int, int]] = ((round(x - radius), round(y - radius)),
-                                                       (round(x + radius), round(y + radius)))
-        draw.ellipse(xy, color, width=0)
+    match anti_alias:
+        case 'off':
+            draw: ImageDraw.ImageDraw = ImageDraw.Draw(image)
+            x, y = center
+            xy: tuple[tuple[int, int], tuple[int, int]] = ((round(x - radius), round(y - radius)),
+                                                           (round(x + radius), round(y + radius)))
+            draw.ellipse(xy, color, width=0)
 
-    elif anti_alias == 'fast':
-        center_x, center_y = center
-        circle_image, destination = get_circle_image(image.mode, (1/2, 1/2), radius, color)
-        delta_x, delta_y = destination
-        image.alpha_composite(circle_image, (math.floor(center_x) + delta_x, math.floor(center_y) + delta_y))
+        case 'fast':
+            center_x, center_y = center
+            circle_image, destination = get_circle_image(image.mode, (1/2, 1/2), radius, color)
+            delta_x, delta_y = destination
+            image.alpha_composite(circle_image, (math.floor(center_x) + delta_x, math.floor(center_y) + delta_y))
 
-    elif anti_alias == 'accurate':
-        circle_image, destination = get_circle_image(image.mode, center, radius, color)
-        image.alpha_composite(circle_image, destination)
+        case 'accurate':
+            circle_image, destination = get_circle_image(image.mode, center, radius, color)
+            image.alpha_composite(circle_image, destination)
 
-    else:
-        raise ValueError
+        case _:
+            raise ValueError
