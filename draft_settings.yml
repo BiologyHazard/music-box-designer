@@ -88,7 +88,7 @@ column_info_size: 6.0
 column_info_color: '#00000080'
 
 # 是否显示小节号
-show_bar_num: false
+show_bar_num: true
 # 每小节多少拍，设置为 null 则从文件中读取，读取不到则认为每小节4拍
 beats_per_bar: null
 # 小节号从几开始

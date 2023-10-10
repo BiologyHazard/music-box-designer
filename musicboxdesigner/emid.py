@@ -76,7 +76,7 @@ class EmidFile:
         return cls(tracks, length)
 
     @classmethod
-    def load_from_file(cls, file: str | bytes | Path | TextIO) -> Self:
+    def load_from_file(cls, file: str | Path | TextIO) -> Self:
         try:
             file_path = Path(file)  # type: ignore
         except Exception:
@@ -89,9 +89,12 @@ class EmidFile:
         self.file_path = file_path
         return self
 
+    def get_length(self) -> int:
+        return math.ceil(max(note.time for track in self.tracks for note in track.notes) / TIME_PER_BEAT * 2) + 1
+
     def update_length(self) -> int:
         '''更新长度并返回更新后的长度'''
-        self.length = math.ceil(max(note.time for track in self.tracks for note in track.notes) / TIME_PER_BEAT * 2) + 1
+        self.length = self.get_length()
         return self.length
 
     def transpose(self, transposition: int) -> None:
@@ -100,21 +103,22 @@ class EmidFile:
 
     def to_str(self) -> str:
         note_str: str = '#'.join(
-            f'{pitch_to_mbindex(note.pitch)},{round(note.time * TIME_PER_BEAT)},{track.name}'
+            f'{pitch_to_mbindex(note.pitch)}, {round(note.time * TIME_PER_BEAT)}, {track.name}'
             for track in self.tracks
             for note in track.notes
         )
         track_names_str: str = ','.join(track.name for track in self.tracks)
         return ''.join((note_str, '&', str(self.length), '*', track_names_str))
 
-    def save_to_file(self, file: str | bytes | Path | TextIO, update_length=True) -> None:
+    def save_to_file(self, file: str | Path | TextIO, update_length=True) -> None:
         if update_length:
             self.update_length()
         s: str = self.to_str()
-        if isinstance(file, (str, bytes, Path)):
+        if isinstance(file, (str, Path)):
             with open(file, 'w', encoding='utf-8') as fp:
-                file = fp
-        file.write(s)
+                fp.write(s)
+        else:
+            file.write(s)
 
     @classmethod
     def from_midi(cls,

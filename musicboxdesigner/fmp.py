@@ -108,17 +108,14 @@ class FmpFile:
     file_path: Path | None = None
 
     @classmethod
-    def load_from_file(cls, file: str | bytes | Path | BinaryIO) -> Self:
-        try:
-            file_path = Path(file)  # type: ignore
-        except Exception:
-            file_path = None
-        if file_path is not None:
-            with open(file_path, 'rb') as fp:
+    def load_from_file(cls, file: str | Path | BinaryIO) -> Self:
+        if isinstance(file, (str, Path)):
+            with open(file, 'rb') as fp:
                 self: Self = cls._load_from_file(fp)
+            self.file_path = Path(file)
         else:
-            self = cls._load_from_file(file)  # type: ignore
-        self.file_path = file_path
+            self = cls._load_from_file(file)
+            self.file_path = None
         return self
 
     @classmethod
@@ -319,8 +316,8 @@ class FmpFile:
         for track in self.tracks:
             track.transpose(transposition)
 
-    def save_to_file(self, file: str | bytes | Path | BinaryIO) -> None:
-        if isinstance(file, (str, bytes, Path)):
+    def save_to_file(self, file: str | Path | BinaryIO) -> None:
+        if isinstance(file, (str, Path)):
             with open(file, 'wb') as fp:
                 self._save_to_file(fp)
         else:

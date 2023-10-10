@@ -195,7 +195,8 @@ class Draft:
     subtitle: str = ''
     music_info: str = ''
     file_path: Path | None = None
-    bpm: float = 120
+    bpm: float | None = None
+    time_signature: tuple[int, int] | None = None
 
     INFO_SPACING: float = 1.0
 
@@ -204,6 +205,7 @@ class Draft:
                        file: str | Path,
                        transposition: int = 0,
                        remove_blank: bool = True,
+                       skip_near_notes: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
         logging.info(f'Loading from {file!r}...')
@@ -212,29 +214,34 @@ class Draft:
                 file = Path(file)
             except Exception:
                 raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file)}.")
-        if file.suffix == '.emid':
-            return cls.load_from_emid(EmidFile.load_from_file(file),
-                                      transposition=transposition,
-                                      remove_blank=remove_blank,
-                                      bpm=bpm if bpm is not None else DEFAULT_BPM)
-        elif file.suffix == '.fmp':
-            return cls.load_from_fmp(FmpFile.load_from_file(file),
-                                     transposition=transposition,
-                                     remove_blank=remove_blank,
-                                     bpm=bpm)
-        elif file.suffix == '.mid':
-            return cls.load_from_midi(MidiFile(file),
-                                      transposition=transposition,
-                                      remove_blank=remove_blank,
-                                      bpm=bpm)
-        else:
-            raise ValueError(f"The file extension must be '.emid', '.fmp' or '.mid', but got {repr(file.suffix)}.")
+        match file.suffix:
+            case '.emid':
+                return cls.load_from_emid(EmidFile.load_from_file(file),
+                                          transposition=transposition,
+                                          remove_blank=remove_blank,
+                                          skip_near_notes=skip_near_notes,
+                                          bpm=bpm if bpm is not None else DEFAULT_BPM)
+            case '.fmp':
+                return cls.load_from_fmp(FmpFile.load_from_file(file),
+                                         transposition=transposition,
+                                         remove_blank=remove_blank,
+                                         skip_near_notes=skip_near_notes,
+                                         bpm=bpm)
+            case '.mid':
+                return cls.load_from_midi(MidiFile(file),
+                                          transposition=transposition,
+                                          remove_blank=remove_blank,
+                                          skip_near_notes=skip_near_notes,
+                                          bpm=bpm)
+            case other:
+                raise ValueError(f"The file extension must be '.emid', '.fmp' or '.mid', but got {repr(other)}.")
 
     @classmethod
     def load_from_emid(cls,
                        emid_file: EmidFile,
                        transposition: int = 0,
                        remove_blank: bool = True,
+                       skip_near_notes: bool = True,
                        bpm: float = DEFAULT_BPM,
                        ) -> Self:
         self: Self = cls()
@@ -251,7 +258,8 @@ class Draft:
                     logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.time / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
-        self.remove_invalid_notes()
+        if skip_near_notes:
+            self.remove_near_notes()
         return self
 
     @classmethod
@@ -259,6 +267,7 @@ class Draft:
                       fmp_file: FmpFile,
                       transposition: int = 0,
                       remove_blank: bool = True,
+                      skip_near_notes: bool = True,
                       bpm: float | None = None,
                       ) -> Self:
         self: Self = cls()
@@ -266,6 +275,7 @@ class Draft:
         self.subtitle = fmp_file.subtitle
         self.file_path = fmp_file.file_path
         self.bpm = bpm if bpm is not None else mido.tempo2bpm(fmp_file.tempo)
+        self.time_signature = fmp_file.time_signature
 
         for track in fmp_file.tracks:
             for note in track.notes:
@@ -277,7 +287,8 @@ class Draft:
                     logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
-        self.remove_invalid_notes()
+        if skip_near_notes:
+            self.remove_near_notes()
         return self
 
     @classmethod
@@ -285,6 +296,7 @@ class Draft:
                        midi_file: MidiFile,
                        transposition: int = 0,
                        remove_blank: bool = True,
+                       skip_near_notes: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
 
@@ -327,7 +339,8 @@ class Draft:
         self.notes.sort(key=lambda note: note.time)
         if remove_blank:
             self.remove_blank()
-        self.remove_invalid_notes()
+        if skip_near_notes:
+            self.remove_near_notes()
         return self
 
     def remove_blank(self) -> None:
@@ -337,7 +350,7 @@ class Draft:
         blank: int = math.floor(self.notes[0].time)
         self.notes = [Note(note.pitch, note.time - blank) for note in self.notes]
 
-    def remove_invalid_notes(self) -> None:
+    def remove_near_notes(self) -> None:
         self.notes.sort(key=lambda note: note.time)
         latest_time = defaultdict(lambda: -MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT)
         new_notes: list[Note] = []
@@ -369,7 +382,7 @@ class Draft:
         if music_info is None:
             music_info = self.music_info
         if show_bpm is None:
-            show_bpm = self.bpm
+            show_bpm = self.bpm if self.bpm is not None else 120
         if settings is None:
             settings = DraftSettings()
 
@@ -665,7 +678,31 @@ class Draft:
 
         if settings.show_bar_num:
             logging.debug('Drawing bar nums...')
-            raise NotImplementedError
+            bar_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
+                str(settings.font_path), round(mm_to_pixel(settings.bar_num_size, settings.ppi)))
+
+            if settings.beats_per_bar is not None:
+                beats_per_bar: int = settings.beats_per_bar
+            elif self.time_signature is not None:
+                beats_per_bar = self.time_signature[0]
+            else:
+                beats_per_bar = 4
+
+            for i, row in enumerate(range(0, rows, beats_per_bar)):
+                col: int = math.floor((row - first_col_rows + rows_per_col) / rows_per_col)
+                page: int = col // cols_per_page
+                col_in_page: int = col % cols_per_page
+                current_col_y: float = body_y if col == 0 else first_row_y
+                row_in_col: float = (row if col == 0 else
+                                     (row - first_col_rows + rows_per_col) % rows_per_col)
+                draws[page].text(
+                    pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER - settings.note_radius,
+                                     current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi),
+                    str(i + settings.bar_num_start),
+                    settings.bar_num_color.as_hex(),
+                    bar_num_font,
+                    'rm',
+                )
 
         # 音符
         logging.debug('Drawing notes...')
@@ -752,17 +789,26 @@ def get_midi_bpm(midi_file: MidiFile) -> float | None:
         for message in track:
             if message.type == 'set_tempo':
                 return mido.tempo2bpm(message.tempo)
+    return None
 
 
-MM_PER_INCH = 25.4
+def get_midi_time_signature(midi_file: MidiFile) -> tuple[int, int] | None:
+    for track in midi_file.tracks:
+        for message in track:
+            if message.type == 'time_signature':
+                return (message.numerator, message.denominator)
+    return None
+
+
+_MM_PER_INCH = 25.4
 
 
 def mm_to_pixel(x: float, /, ppi: float) -> float:
-    return x / MM_PER_INCH * ppi
+    return x / _MM_PER_INCH * ppi
 
 
 def pixel_to_mm(x: float, /, ppi: float) -> float:
-    return x * MM_PER_INCH / ppi
+    return x * _MM_PER_INCH / ppi
 
 
 def pos_mm_to_pixel(pos: tuple[float, float], ppi: float, minus_a_half: bool = False) -> tuple[int, int]:
