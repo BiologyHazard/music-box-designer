@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 import mido
+import yaml
 from mido import MidiFile
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import (BaseModel, FilePath, FiniteFloat, NonNegativeFloat,
@@ -16,8 +17,8 @@ from pydantic import (BaseModel, FilePath, FiniteFloat, NonNegativeFloat,
 from pydantic_extra_types.color import Color
 
 from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
-                     MIN_TRIGGER_SPACING, MM_PER_INCH,
-                     MUSIC_BOX_30_NOTES_PITCH, NOTES, RIGHT_BORDER)
+                     MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES,
+                     RIGHT_BORDER)
 from .emid import EmidFile
 from .fmp import FmpBpmTimeSignatureMark, FmpCommentMark, FmpEndMark, FmpFile
 
@@ -127,7 +128,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     whole_beat_line_color: Color = Color('black')
     '''整拍线条颜色'''
     half_beat_line_type: Literal['solid', 'dashed'] = 'solid'
-    '''半拍线条类型，`'solid'`表示实线，`dashed`表示虚线'''
+    '''半拍线条类型，`'solid'`表示实线，`'dashed'`表示虚线'''
     half_beat_line_color: Color = Color('gray')
     '''半拍线条颜色'''
     vertical_line_color: Color = Color('black')
@@ -153,11 +154,29 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
         except Exception:
             raise Exception(f'Failed to serialize background of value {value}')
 
+    def model_dump_yaml(self, **kwargs) -> str:
+        return yaml.dump(self.model_dump(mode='json'),
+                         default_flow_style=True,
+                         allow_unicode=True,
+                         sort_keys=False,
+                         **kwargs)
+
+    @classmethod
+    def model_validate_yaml(cls, yaml_data) -> Self:
+        return cls.model_validate(yaml.safe_load(yaml_data))
+
 
 class ImageList(list[Image.Image]):
     file_name: str
 
     def save(self, file_name: str | None = None, overwrite: bool = False) -> None:
+        '''
+        保存图片到文件。
+
+        参数：
+        - `file_name`：文件保存路径的格式化字符串，例如`'output/pic_{}.png'`。若不指定，则取`self.file_name`
+        - `overwrite`：是否允许覆盖同名文件，默认为`False`
+        '''
         if file_name is None:
             file_name = self.file_name
         for i, image in enumerate(self):
@@ -246,16 +265,16 @@ class Draft:
         self.title = self.music_info = fmp_file.title
         self.subtitle = fmp_file.subtitle
         self.file_path = fmp_file.file_path
-        self.bpm = bpm if bpm is not None else fmp_file.bpm
+        self.bpm = bpm if bpm is not None else mido.tempo2bpm(fmp_file.tempo)
 
         for track in fmp_file.tracks:
             for note in track.notes:
                 if note.velocity == 0:
                     continue
                 if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
-                    self.notes.append(Note(note.pitch + transposition, note.time))
+                    self.notes.append(Note(note.pitch + transposition, note.tick / fmp_file.ticks_per_beat))
                 else:
-                    logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.time / 4) + 1} is out of range')
+                    logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
         self.remove_invalid_notes()
@@ -733,6 +752,9 @@ def get_midi_bpm(midi_file: MidiFile) -> float | None:
         for message in track:
             if message.type == 'set_tempo':
                 return mido.tempo2bpm(message.tempo)
+
+
+MM_PER_INCH = 25.4
 
 
 def mm_to_pixel(x: float, /, ppi: float) -> float:

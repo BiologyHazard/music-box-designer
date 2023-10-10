@@ -1,0 +1,115 @@
+# 纸带设计稿样式配置文件
+# 建议复制一份再修改
+
+# 关于颜色的配置支持以下格式：
+# - 颜色名称，例如 'red', 'lightgreen', 'darkblue'
+# - 短 hex 表示，例如 '#000', '0xFfF', '123'
+# - 长 hex 表示，例如 '#000000', '0xFFffFF', '112233'
+# - rgb(<r>, <g>, <b>)，例如 'rgb(255, 0, 0)'
+# - rgba(<r>, <g>, <b>, <a>)，例如 'rgba(255, 0, 0, 0.8)'
+# - 'transparent'
+
+# 页面设置
+# 抗锯齿等级（仅对音符生效）
+anti_alias: fast
+# 图片分辨率，单位像素/英寸
+ppi: 300.0
+# 页面大小（宽，高），单位毫米，设置为 null 则会使得图片只有一栏并且自动调整大小
+paper_size: [210.0, 297.0]
+# 页面边距（上，下，左，右），单位毫米
+margins: [8.0, 8.0, 0.0, 0.0]
+# 背景颜色或背景图片路径
+background: white
+# 字体文件路径
+font_path: fonts/SourceHanSans.otf
+# 页面顶部文字
+heading: 作者 Bio-Hazard（B站同名）   禁止商用    打谱软件：https://github.com/BiologyHazard/MusicBoxDesigner
+# 页面顶部文字大小，单位毫米，将以 round(heading_size * ppi / MM_PER_INCH) 转变为像素大小
+heading_size: 3.5
+# 页面顶部文字颜色
+heading_color: black
+# 分隔线颜色
+separating_line_color: black
+
+
+# 标题设置
+# 信息显示总开关
+show_info: true
+
+# 是否显示标题
+show_title: true
+# 标题对齐方式
+title_align: center
+# 标题到页面上边的距离，单位毫米，设置为 null 则自动
+title_height: null
+# 标题文字大小，单位毫米，将以 round(title_size * ppi / MM_PER_INCH) 转变为像素大小
+title_size: 4.5
+# 标题颜色
+title_color: black
+
+# 是否显示副标题
+show_subtitle: true
+# 副标题对齐方式
+subtitle_align: center
+# 副标题到页面上边的距离，单位毫米，设置为 null 则自动
+subtitle_height: null
+# 副标题文字大小，单位毫米，将以 round(subtitle_size * ppi / MM_PER_INCH) 转变为像素大小
+subtitle_size: 3.0
+# 副标题颜色
+subtitle_color: black
+
+# 是否显示乐曲速度信息
+show_tempo: true
+# 乐曲速度信息的格式化字符串，支持参数 bpm
+tempo_format: '{bpm:.0f}bpm'
+# 是否显示音符数量和纸带长度信息
+show_note_count: true
+# 音符数量和纸带长度信息的格式化字符串，支持参数 note_count, meter, centimeter 和 milimeter
+note_count_format: '{note_count} notes / {meter:.2f}m'
+# 乐曲速度信息、音符数量和纸带长度信息文字大小，单位毫米，将以 round(tempo_note_count_size * ppi / MM_PER_INCH) 转变为像素大小
+tempo_note_count_size: 3.0
+# 乐曲速度信息、音符数量和纸带长度信息颜色
+tempo_note_count_color: black
+
+# 谱面设置
+# 谱面到页面上边的距离，单位毫米，设置为 null 则自动
+body_height: null
+
+# 音符颜色
+note_color: black
+# 音符半径，单位毫米
+note_radius: 1.14
+
+# 是否在每栏右上角显示 music_info 以及栏号
+show_column_info: true
+# 栏信息文字大小，单位毫米，将以 round(column_info_size * ppi / MM_PER_INCH) 转变为像素大小
+column_info_size: 6.0
+# 栏信息颜色
+column_info_color: '#00000080'
+
+# 是否显示小节号
+show_bar_num: false
+# 每小节多少拍，设置为 null 则从文件中读取，读取不到则认为每小节4拍
+beats_per_bar: null
+# 小节号从几开始
+bar_num_start: 1
+# 小节号文字大小，单位毫米，将以 round(bar_num_size * ppi / MM_PER_INCH) 转变为像素大小
+bar_num_size: 3.0
+# 小节号颜色
+bar_num_color: black
+
+# 是否显示自定义水印
+show_custom_watermark: false
+# 自定义水印内容
+custom_watermark: 自定义水印
+# 自定义水印颜色
+custom_watermark_color: '#00000060'
+
+# 整拍线条颜色
+whole_beat_line_color: black
+# 半拍线条类型，solid 表示实线，dashed 表示虚线
+half_beat_line_type: solid
+# 半拍线条颜色
+half_beat_line_color: grey
+# 竖向线条颜色
+vertical_line_color: black

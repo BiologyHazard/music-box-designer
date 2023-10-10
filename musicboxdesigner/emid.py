@@ -5,7 +5,7 @@ from typing import Self, TextIO
 
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
-from .consts import DEFAULT_DURATION, DEFAULT_TICKS_PER_BEAT, MUSIC_BOX_30_NOTES_PITCH
+from .consts import DEFAULT_DURATION, MIDI_DEFAULT_TICKS_PER_BEAT, MUSIC_BOX_30_NOTES_PITCH
 
 TIME_PER_BEAT = 8
 
@@ -146,7 +146,7 @@ class EmidFile:
                     *,
                     bpm: float = 120,
                     transposition: int = 0,
-                    ticks_per_beat: int = DEFAULT_TICKS_PER_BEAT,
+                    ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT,
                     ) -> MidiFile:
         midi_file = MidiFile()
         midi_file.ticks_per_beat = ticks_per_beat
