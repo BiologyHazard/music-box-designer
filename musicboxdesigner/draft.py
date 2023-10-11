@@ -123,6 +123,8 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''是否显示自定义水印'''
     custom_watermark: str = '自定义水印'
     '''自定义水印内容'''
+    custom_watermark_size: NonNegativeFloat = 6.0
+    '''自定义水印文字大小，单位毫米，将以`round(custom_watermark_size * ppi / MM_PER_INCH)`转变为像素大小'''
     custom_watermark_color: Color = Color('#00000060')
     '''自定义水印颜色'''
     whole_beat_line_color: Color = Color('black')
@@ -202,33 +204,33 @@ class Draft:
 
     @classmethod
     def load_from_file(cls,
-                       file: str | Path,
+                       file_path: str | Path,
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
-        logging.info(f'Loading from {file!r}...')
-        if not isinstance(file, Path):
+        logging.info(f'Loading from {file_path!r}...')
+        if not isinstance(file_path, Path):
             try:
-                file = Path(file)
+                file_path = Path(file_path)
             except Exception:
-                raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file)}.")
-        match file.suffix:
+                raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file_path)}.")
+        match file_path.suffix:
             case '.emid':
-                return cls.load_from_emid(EmidFile.load_from_file(file),
+                return cls.load_from_emid(EmidFile.load_from_file(file_path),
                                           transposition=transposition,
                                           remove_blank=remove_blank,
                                           skip_near_notes=skip_near_notes,
                                           bpm=bpm if bpm is not None else DEFAULT_BPM)
             case '.fmp':
-                return cls.load_from_fmp(FmpFile.load_from_file(file),
+                return cls.load_from_fmp(FmpFile.load_from_file(file_path),
                                          transposition=transposition,
                                          remove_blank=remove_blank,
                                          skip_near_notes=skip_near_notes,
                                          bpm=bpm)
             case '.mid':
-                return cls.load_from_midi(MidiFile(file),
+                return cls.load_from_midi(MidiFile(file_path),
                                           transposition=transposition,
                                           remove_blank=remove_blank,
                                           skip_near_notes=skip_near_notes,
@@ -388,9 +390,9 @@ class Draft:
 
         self.notes.sort(key=lambda note: note.time)
         if self.notes:
-            length: float = self.notes[-1].time * LENGTH_MM_PER_BEAT * scale
+            length_mm: float = self.notes[-1].time * LENGTH_MM_PER_BEAT * scale
         else:
-            length = 0
+            length_mm = 0
 
         # 计算各元素坐标
         up_margin, down_margin, left_margin, right_margin = settings.margins
@@ -428,9 +430,9 @@ class Draft:
                 if settings.show_note_count:
                     format_dict = dict(
                         note_count=len(self.notes),
-                        meter=length / 1000,
-                        centimeter=length / 100,
-                        milimeter=length,
+                        meter=length_mm / 1000,
+                        centimeter=length_mm / 100,
+                        milimeter=length_mm,
                     )
                     try:
                         note_count_text: str = settings.note_count_format.format(**format_dict)
@@ -454,7 +456,7 @@ class Draft:
             body_y = y
 
         # 计算纸张大小
-        rows: int = math.floor(length / LENGTH_MM_PER_BEAT) + 1
+        rows: int = math.floor(length_mm / LENGTH_MM_PER_BEAT) + 1
         if settings.paper_size is not None:
             page_width, page_height = settings.paper_size
             rows_per_col: int = math.floor((page_height - up_margin - down_margin) / LENGTH_MM_PER_BEAT)
@@ -475,7 +477,7 @@ class Draft:
             body_y = next_body_y
 
         logging.info(f'Notes: {len(self.notes)}')
-        logging.info(f'Length: {length / 1000:.2f}m')
+        logging.info(f'Length: {length_mm / 1000:.2f}m')
         logging.info(f'Cols: {cols}')
         logging.info(f'Pages: {pages}')
 
@@ -483,13 +485,29 @@ class Draft:
         image_size: tuple[int, int] = pos_mm_to_pixel((page_width, page_height), settings.ppi)
         images: list[Image.Image] = [Image.new('RGBA', image_size, '#00000000') for _ in range(pages)]
         draws: list[ImageDraw.ImageDraw] = [ImageDraw.Draw(image) for image in images]
-        # images_anti_alias: list[Image.Image] = [Image.new('RGBA', image_size, '#00000000') for _ in range(pages)]
-        # draws_anti_alias: list[ImageDraw.ImageDraw] = [ImageDraw.Draw(image) for image in images_anti_alias]
 
         # 自定义水印
         if settings.show_custom_watermark:
             logging.debug('Drawing custom watermark...')
-            raise NotImplementedError
+            custom_watermark_font: ImageFont.FreeTypeFont = ImageFont.truetype(
+                str(settings.font_path), round(mm_to_pixel(settings.custom_watermark_size, settings.ppi)))
+
+            for i, row in enumerate(range(0, rows, 10)):
+                col: int = math.floor((row - first_col_rows + rows_per_col) / rows_per_col)
+                page: int = col // cols_per_page
+                col_in_page: int = col % cols_per_page
+                current_col_y: float = body_y if col == 0 else first_row_y
+                row_in_col: float = (row if col == 0 else
+                                     (row - first_col_rows + rows_per_col) % rows_per_col)
+                draws[page].text(
+                    pos_mm_to_pixel((first_col_x + (col_in_page + 1/2) * COL_WIDTH,
+                                     current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi),
+                    settings.custom_watermark,
+                    settings.custom_watermark_color.as_hex(),
+                    custom_watermark_font,
+                    'mm',
+                    align='center'
+                )
 
         # 分隔线
         logging.debug('Drawing separating lines...')
@@ -800,15 +818,15 @@ def get_midi_time_signature(midi_file: MidiFile) -> tuple[int, int] | None:
     return None
 
 
-_MM_PER_INCH = 25.4
+MM_PER_INCH = 25.4
 
 
 def mm_to_pixel(x: float, /, ppi: float) -> float:
-    return x / _MM_PER_INCH * ppi
+    return x / MM_PER_INCH * ppi
 
 
 def pixel_to_mm(x: float, /, ppi: float) -> float:
-    return x * _MM_PER_INCH / ppi
+    return x * MM_PER_INCH / ppi
 
 
 def pos_mm_to_pixel(pos: tuple[float, float], ppi: float, minus_a_half: bool = False) -> tuple[int, int]:

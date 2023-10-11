@@ -102,6 +102,8 @@ bar_num_color: black
 show_custom_watermark: false
 # 自定义水印内容
 custom_watermark: 自定义水印
+# 自定义水印文字大小，单位毫米，将以 round(custom_watermark_size * ppi / MM_PER_INCH) 转变为像素大小
+custom_watermark_size: 6.0
 # 自定义水印颜色
 custom_watermark_color: '#00000060'
 
