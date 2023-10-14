@@ -1,4 +1,3 @@
-import logging
 import math
 import re
 from bisect import bisect_right
@@ -19,12 +18,9 @@ from pydantic_extra_types.color import Color
 from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
                      MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES,
                      RIGHT_BORDER)
-from .emid import EmidFile
-from .fmp import FmpBpmTimeSignatureMark, FmpCommentMark, FmpEndMark, FmpFile
-
-default_format: str = '{asctime} [{levelname}] {module} | {message}'
-default_date_format: str = '%Y-%m-%d %H:%M:%S'
-logging.basicConfig(level=logging.DEBUG, format=default_format, datefmt=default_date_format, style='{')
+from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
+from .fmp import FmpFile
+from .log import logger
 
 DEFAULT_BPM: float = 120
 
@@ -186,7 +182,7 @@ class ImageList(list[Image.Image]):
                 path_to_save = Path(file_name.format(i+1))
             else:
                 path_to_save: Path = find_available_filename(file_name.format(i+1))
-            logging.info(f'Saving image {i+1} of {len(self)} to {path_to_save.as_posix()!r}...')
+            logger.info(f'Saving image {i+1} of {len(self)} to {path_to_save.as_posix()!r}...')
             image.save(path_to_save)
 
 
@@ -210,12 +206,11 @@ class Draft:
                        skip_near_notes: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
-        logging.info(f'Loading from {file_path!r}...')
-        if not isinstance(file_path, Path):
-            try:
-                file_path = Path(file_path)
-            except Exception:
-                raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file_path)}.")
+        logger.info(f'Loading from {file_path!r}...')
+        try:
+            file_path = Path(file_path)
+        except Exception:
+            raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file_path)}.")
         match file_path.suffix:
             case '.emid':
                 return cls.load_from_emid(EmidFile.load_from_file(file_path),
@@ -254,10 +249,10 @@ class Draft:
 
         for track in emid_file.tracks:
             for note in track.notes:
-                if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
-                    self.notes.append(Note(note.pitch + transposition, note.time))
+                if (pitch := EMID_PITCHES[note.emid_pitch] + transposition) in MUSIC_BOX_30_NOTES_PITCH:
+                    self.notes.append(Note(pitch, note.tick / EMID_TICKS_PER_BEAT))
                 else:
-                    logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.time / 4) + 1} is out of range')
+                    logger.warning(f'Note {pitch} in bar {math.floor(note.tick / EMID_TICKS_PER_BEAT / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -286,7 +281,7 @@ class Draft:
                 if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
                     self.notes.append(Note(note.pitch + transposition, note.tick / fmp_file.ticks_per_beat))
                 else:
-                    logging.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
+                    logger.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -337,7 +332,7 @@ class Draft:
                     real_time: float = (tempo_events[i].time_passed  # type: ignore
                                         + mido.tick2second(midi_tick - tick, ticks_per_beat, tempo))
                     time = real_time / 60 * bpm
-                self.notes.append(Note(message.note + transposition, time))  # 添加note
+                self.notes.append(Note(message.note + transposition, time))
         self.notes.sort(key=lambda note: note.time)
         if remove_blank:
             self.remove_blank()
@@ -358,10 +353,10 @@ class Draft:
         new_notes: list[Note] = []
         for note in self.notes:
             if note.pitch not in MUSIC_BOX_30_NOTES_PITCH:
-                logging.warning(f'Note {note.pitch} in bar {math.floor(note.time / 4) + 1} is out of range')
+                logger.warning(f'Note {note.pitch} in bar {math.floor(note.time / 4) + 1} is out of range.')
                 continue
             if note.time < latest_time[note.pitch] + MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT:
-                logging.warning(f'Too Near! Note {note.pitch} in bar {math.floor(note.time / 4) + 1}, SKIPPING!')
+                logger.warning(f'Too Near! Note {note.pitch} in bar {math.floor(note.time / 4) + 1}, SKIPPING!')
                 continue
             new_notes.append(note)
             latest_time[note.pitch] = note.time
@@ -421,8 +416,8 @@ class Draft:
                     try:
                         tempo_text: str = settings.tempo_format.format(bpm=show_bpm)
                     except Exception as e:
-                        logging.warning(f'Cannot format tempo: {e!r}')
-                        logging.warning("Falling back to default tempo format '{bpm:.0f}bpm'.")
+                        logger.warning(f'Cannot format tempo: {e!r}')
+                        logger.warning("Falling back to default tempo format '{bpm:.0f}bpm'.")
                         tempo_text = '{bpm:.0f}bpm'.format(bpm=show_bpm)
                 else:
                     tempo_text = ''
@@ -437,8 +432,8 @@ class Draft:
                     try:
                         note_count_text: str = settings.note_count_format.format(**format_dict)
                     except Exception as e:
-                        logging.warning(f'Cannot format note count: {e!r}')
-                        logging.warning("Falling back to default note count format '{note_count} notes / {meter:.2f}m'.")
+                        logger.warning(f'Cannot format note count: {e!r}')
+                        logger.warning("Falling back to default note count format '{note_count} notes / {meter:.2f}m'.")
                         note_count_text = '{note_count} notes / {meter:.2f}m'.format(**format_dict)
                 else:
                     note_count_text = ''
@@ -476,10 +471,10 @@ class Draft:
         if next_body_y + first_col_rows * LENGTH_MM_PER_BEAT + down_margin <= page_height:
             body_y = next_body_y
 
-        logging.info(f'Notes: {len(self.notes)}')
-        logging.info(f'Length: {length_mm / 1000:.2f}m')
-        logging.info(f'Cols: {cols}')
-        logging.info(f'Pages: {pages}')
+        logger.info(f'Notes: {len(self.notes)}')
+        logger.info(f'Length: {length_mm / 1000:.2f}m')
+        logger.info(f'Cols: {cols}')
+        logger.info(f'Pages: {pages}')
 
         # 构建图片列表
         image_size: tuple[int, int] = pos_mm_to_pixel((page_width, page_height), settings.ppi)
@@ -488,7 +483,7 @@ class Draft:
 
         # 自定义水印
         if settings.show_custom_watermark:
-            logging.debug('Drawing custom watermark...')
+            logger.debug('Drawing custom watermark...')
             custom_watermark_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.custom_watermark_size, settings.ppi)))
 
@@ -510,7 +505,7 @@ class Draft:
                 )
 
         # 分隔线
-        logging.debug('Drawing separating lines...')
+        logger.debug('Drawing separating lines...')
         for i, draw in enumerate(draws):
             num: int = cols_per_page if i != pages - 1 else last_page_cols
             for j in range(num + 1):
@@ -524,7 +519,7 @@ class Draft:
 
         # 页眉
         if settings.heading:
-            logging.debug('Drawing heading...')
+            logger.debug('Drawing heading...')
             heading_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.heading_size, settings.ppi)))
             for draw in draws:
@@ -532,7 +527,7 @@ class Draft:
                           settings.heading, 'black', heading_font, 'md')
 
         if settings.show_info:
-            logging.debug('Drawing info...')
+            logger.debug('Drawing info...')
             # 标题
             if settings.show_title:
                 if settings.title_align == 'left':
@@ -584,7 +579,7 @@ class Draft:
 
         # music_info以及栏号
         if settings.show_column_info:
-            logging.debug('Drawing column info...')
+            logger.debug('Drawing column info...')
             column_info_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.column_info_size, settings.ppi)))
             for page, draw in enumerate(draws):
@@ -600,7 +595,7 @@ class Draft:
                         ), char, settings.column_info_color.as_hex(), column_info_font, 'mm')
 
         # 栏下方页码
-        logging.debug('Drawing page nums...')
+        logger.debug('Drawing page nums...')
         page_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
             str(settings.font_path), round(mm_to_pixel(3.0, settings.ppi)))
         for page, draw in enumerate(draws):
@@ -621,7 +616,7 @@ class Draft:
                     settings.ppi,
                 ), f'{col+1}', 'black', page_num_font, 'la')
 
-        logging.debug('Drawing lines...')
+        logger.debug('Drawing lines...')
         for page, draw in enumerate(draws):
             for col_in_page in range(cols_per_page):
                 if page == pages - 1 and col_in_page >= last_page_cols:
@@ -695,7 +690,7 @@ class Draft:
                     )
 
         if settings.show_bar_num:
-            logging.debug('Drawing bar nums...')
+            logger.debug('Drawing bar nums...')
             bar_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.bar_num_size, settings.ppi)))
 
@@ -723,12 +718,12 @@ class Draft:
                 )
 
         # 音符
-        logging.debug('Drawing notes...')
+        logger.debug('Drawing notes...')
         for note in self.notes:
             try:
                 index: int = MUSIC_BOX_30_NOTES_PITCH.index(note.pitch)
             except:
-                logging.warn(f'{note} out of range, SKIPPING!')
+                logger.warning(f'{note} out of range, SKIPPING!')
                 continue
             col: int = math.floor((note.time * scale - first_col_rows + rows_per_col) / rows_per_col)
             page: int = col // cols_per_page
@@ -751,7 +746,7 @@ class Draft:
         else:
             backgrond_image = Image.new('RGBA', image_size, settings.background.as_hex())
 
-        logging.info('Compositing images...')
+        logger.info('Compositing images...')
         image_list = ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
         if self.file_path is None:
             image_list.file_name = make_valid_filename(f'{title}_{{}}.png')
@@ -766,13 +761,12 @@ def make_valid_filename(s) -> str:
 
 def find_available_filename(path: str | Path) -> Path:
     path = Path(path)
-    if path.exists():
-        i = 1
-        while (new_path := path.with_name(f'{path.stem} ({i}){path.suffix}')).exists():
-            i += 1
-        return new_path
-    else:
+    if not path.exists():
         return path
+    i = 1
+    while (new_path := path.with_stem(f'{path.stem} ({i})')).exists():
+        i += 1
+    return new_path
 
 
 @dataclass
