@@ -13,21 +13,20 @@ def draft_func(args) -> None:
 
 
 def count_func(args) -> None:
-    note_count, length_mm = get_note_count_and_length(args.file_path,
-                                                      args.transposition,
-                                                      not args.keep_blank,
-                                                      not args.keep_near_notes,
-                                                      args.bpm,
-                                                      args.scale)
+    note_count, length_mm = get_note_count_and_length(
+        args.file_path,
+        args.transposition,
+        not args.keep_blank,
+        not args.keep_near_notes,
+        args.bpm,
+        args.scale,
+    )
     print(f'Notes: {note_count}')
     print(f'Length: {length_mm / 1000:.2f}m')
 
 
 parser = argparse.ArgumentParser(description='Music Box Designer')
-subparsers = parser.add_subparsers(
-    title='commands',
-    required=True,
-)
+subparsers = parser.add_subparsers(title='commands', required=True)
 
 convert_parser = subparsers.add_parser(
     'convert',
@@ -39,7 +38,7 @@ convert_parser = subparsers.add_parser(
   {parser.prog} convert examples/*.mid examples/*.fmp
   {parser.prog} convert examples/*.mid .fmp    # equivalent to the previous command
 ''',
-    formatter_class=argparse.RawDescriptionHelpFormatter
+    formatter_class=argparse.RawDescriptionHelpFormatter,
 )
 convert_parser.set_defaults(func=convert_func)
 convert_parser.add_argument(
@@ -54,19 +53,18 @@ convert_parser.add_argument(
 )
 convert_parser.add_argument('-o', '--overwrite', action='store_true')
 
-draft_parser = subparsers.add_parser(
-    'draft', help='Generate draft pics.')
+draft_parser = subparsers.add_parser('draft', help='Generate draft pics.')
 draft_parser.set_defaults(func=draft_func)
 draft_parser.add_argument('file_path', type=str)
-draft_parser.add_argument('settings_path', type=str, nargs='?', default='settings.yml')
+draft_parser.add_argument('settings_path', type=str, nargs='?', default='settings.yml',
+                          )
 draft_parser.add_argument('-o', '--overwrite', action='store_true')
 
-count_parser = subparsers.add_parser(
-    'count', help='Count notes and length.')
+count_parser = subparsers.add_parser('count', help='Count notes and length.')
 count_parser.set_defaults(func=count_func)
 count_parser.add_argument('file_path', type=str)
-count_parser.add_argument('-t', '--transposition',  type=int, default=0)
-count_parser.add_argument('-k', '--keep-blank',  action='store_true')
+count_parser.add_argument('-t', '--transposition', type=int, default=0)
+count_parser.add_argument('-k', '--keep-blank', action='store_true')
 count_parser.add_argument('-n', '--keep-near-notes', action='store_true')
 count_parser.add_argument('-b', '--bpm', type=float, default=None)
 count_parser.add_argument('-s', '--scale', type=float, default=1)

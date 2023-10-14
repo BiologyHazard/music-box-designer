@@ -7,7 +7,7 @@ from typing import Any, BinaryIO, Literal, NamedTuple, Self
 import mido.midifiles.tracks
 from mido import Message, MetaMessage, MidiFile, MidiTrack
 
-from .consts import DEFAULT_DURATION, MIDI_DEFAULT_TICKS_PER_BEAT
+from .consts import MIDI_DEFAULT_TICKS_PER_BEAT
 from .log import logger
 
 FMP_DEFAULT_TICKS_PER_BEAT = 96
@@ -810,7 +810,6 @@ class FmpFile:
         return self
 
     def export_midi(self,
-                    *,
                     transposition: int = 0,
                     apply_instrument_transposition: bool = True,
                     ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT,
@@ -894,7 +893,7 @@ def read_int(file: BinaryIO,
     return int.from_bytes(file.read(byte), byteorder, signed=signed)
 
 
-def read_bool(file: BinaryIO) -> bool:
+def read_bool(file: BinaryIO, /) -> bool:
     b: bytes = file.read(1)
     i: int = int.from_bytes(b)
     if i not in (0, 1):
@@ -903,6 +902,7 @@ def read_bool(file: BinaryIO) -> bool:
 
 
 def write_int(file: BinaryIO,
+              /,
               value: int,
               byte: int = 1,
               byteorder: Literal['big', 'little'] = 'little') -> None:
@@ -911,5 +911,6 @@ def write_int(file: BinaryIO,
 
 
 def write_bool(file: BinaryIO,
+               /,
                value: bool) -> None:
     file.write(value.to_bytes())

@@ -3,21 +3,25 @@
 # MusicBoxDesigner
 
 [![License](https://img.shields.io/github/license/BiologyHazard/MusicBoxDesigner?style=flat-square)](https://github.com/BiologyHazard/MusicBoxDesigner/blob/main/LICENSE)
-[![Release](https://img.shields.io/github/release/BiologyHazard/MusicBoxDesigner?style=flat-square)](https://github.com/Mrs4s/go-cqhttp/releases)
+[![Release](https://img.shields.io/github/release/BiologyHazard/MusicBoxDesigner?style=flat-square)](https://github.com/BiologyHazard/MusicBoxDesigner/releases/latest)
 
 </div>
 
 主要功能
+
 - .mid, .emid, .fmp 文件之间互相转换
 - 生成纸带设计稿图片
+- 统计音符数量和纸带长度
 
-作者：[bilibili@Bio-Hazard](https://space.bilibili.com/37179776)
+作者：[BioHazard](https://space.bilibili.com/37179776)
+
+- bilibili [Bio-Hazard](https://space.bilibili.com/37179776)
 - QQ [3482991796](https://wpa.qq.com/msgrd?&uin=3482991796)
 - QQ群 [586134350](https://qm.qq.com/cgi-bin/qm/qr?k=aM1lRdY9HvrQW3huC81hRmCQaE7CkyXh)
 
-FairyMusicBox 系列软件作者：[bilibili@调皮的码农](https://space.bilibili.com/40962795)
+FairyMusicBox 官网：<http://www.fairymusicbox.com/>
 
-FairyMusicBox 官网：http://www.fairymusicbox.com/
+FairyMusicBox 系列软件作者：[bilibili@调皮的码农](https://space.bilibili.com/40962795)
 
 
 # 提示
@@ -53,7 +57,7 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
 1. 获取源代码
 
     运行命令
-    ```
+    ```bash
     git clone https://github.com/BiologyHazard/MusicBoxDesigner.git
     ```
 
@@ -64,13 +68,13 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
     - Windows 系统
 
         按快捷键 Win + R，输入 cmd，回车，在弹出的窗口中输入
-        ```
+        ```bash
         python --version
         ```
         检查 Python 版本是否大于等于 3.12。如果报错或者版本过低，您需要按照下面的方法安装 Python。
 
-        > 请自行前往 https://www.python.org/ 下载 Python（3.12及以上）并将 Python 添加到环境变量（在安装过程中勾选 "Add Python to system PATH"）。
-
+        > 请自行前往 [Python 官网](https://www.python.org/) 下载 Python（3.12及以上）并将 Python 添加到环境变量（在安装过程中勾选 "Add Python to system PATH"）。
+        >
         > 对大多数用户来说，您应该下载 Windows installer (64-bit)。
 
     - macOS 系统 以及 Linux 系统
@@ -78,7 +82,8 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
         相信您有能力自己搞定！
 
     安装完成之后，运行命令
-    ```
+
+    ```bash
     python --version
     ```
     检查是否安装成功。
@@ -86,7 +91,7 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
 1. pip 安装依赖
 
     运行命令
-    ```
+    ```bash
     pip install -r requirements.txt
     ```
 
@@ -97,12 +102,12 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
 如果您使用 Windows 系统，在入口程序所在的文件夹的**空白处**，按住 Shift，单击右键，在右键菜单中选择“在终端中打开(T)”，下面的命令请在这个终端中输入。
 
 入口程序本身提供了丰富的帮助信息。运行下面的命令查看帮助。
-```
+```bash
 python main.py --help
 ```
 
 > 如果下载的是可执行文件例如 main-1.0.0.exe，则命令应当是
-> ```
+> ```bash
 > .\main-1.0.0.exe --help
 > ```
 > 请将 "main-1.0.0.exe" 替换为实际的文件名，在接下来的命令中，都请自行把 `python main.py` 替换为 `.\main-1.0.0.exe`
@@ -110,7 +115,7 @@ python main.py --help
 - convert（转换文件格式）
 
     命令为
-    ```
+    ```bash
     python main.py convert source destination [-o]
     ```
     参数 `source` 是源文件路径。可以使用 `directory/*.mid` 表示 directory 目录下的所有 midi 文件。
@@ -122,14 +127,14 @@ python main.py --help
 - draft（生成纸带设计稿图片）
 
     命令为
-    ```
+    ```bash
     python main.py draft file_path [settings_path] [-o]
     ```
 
-- （计算纸带长度和音符个数）
+- count（计算纸带长度和音符个数）
 
     命令为
-    ```
+    ```bash
     python main.py count file_path [-h] [-t TRANSPOSITION] [-k] [-n] [-b BPM] [-s SCALE]
     ```
 
@@ -194,11 +199,9 @@ python main.py --help
     ).save()
     ```
 
-
 # Issue
 
 如果在使用过程中遇到了问题，请点击页面顶部的 Issue -> New Issue，并详细描述您的问题。
-
 
 # TODO
 
