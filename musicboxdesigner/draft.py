@@ -11,13 +11,11 @@ import mido
 import yaml
 from mido import MidiFile
 from PIL import Image, ImageDraw, ImageFont
-from pydantic import (BaseModel, FilePath, FiniteFloat, NonNegativeFloat,
-                      PositiveInt, field_serializer, field_validator)
+from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, PositiveInt, field_serializer, field_validator
 from pydantic_extra_types.color import Color
 
 from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
-                     MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES,
-                     RIGHT_BORDER)
+                     MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES, RIGHT_BORDER)
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
 from .fmp import FmpFile
 from .log import logger
@@ -36,7 +34,7 @@ class Note:
 class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     # 页面设置
     anti_alias: Literal['off', 'fast', 'accurate'] = 'fast'
-    '''抗锯齿等级（仅对音符生效）'''
+    '''抗锯齿等级（仅对音符生效），可选值`'off', 'fast', 'accurate'`'''
     ppi: float = 300
     '''图片分辨率，单位像素/英寸'''
     paper_size: tuple[float, float] | None = (210, 297)
@@ -179,9 +177,9 @@ class ImageList(list[Image.Image]):
             file_name = self.file_name
         for i, image in enumerate(self):
             if overwrite:
-                path_to_save = Path(file_name.format(i+1))
+                path_to_save: Path = Path(file_name.format(i+1))
             else:
-                path_to_save: Path = find_available_filename(file_name.format(i+1))
+                path_to_save = find_available_filename(file_name.format(i+1))
             logger.info(f'Saving image {i+1} of {len(self)} to {path_to_save.as_posix()!r}...')
             image.save(path_to_save)
 
@@ -294,8 +292,7 @@ class Draft:
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
-                       bpm: float | None = None,
-                       ) -> Self:
+                       bpm: float | None = None) -> Self:
 
         self: Self = cls()
         if midi_file.filename is not None:
@@ -349,7 +346,7 @@ class Draft:
 
     def remove_near_notes(self) -> None:
         self.notes.sort(key=lambda note: note.time)
-        latest_time = defaultdict(lambda: -MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT)
+        latest_time: defaultdict[int, float] = defaultdict(lambda: -MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT)
         new_notes: list[Note] = []
         for note in self.notes:
             if note.pitch not in MUSIC_BOX_30_NOTES_PITCH:

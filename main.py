@@ -1,7 +1,6 @@
 import argparse
 
-from musicboxdesigner import (convert, generate_draft,
-                              get_note_count_and_length, logger)
+from musicboxdesigner import convert, generate_draft, get_note_count_and_length, logger
 
 
 def convert_func(args) -> None:
@@ -56,7 +55,7 @@ convert_parser.add_argument('-o', '--overwrite', action='store_true')
 draft_parser = subparsers.add_parser('draft', help='Generate draft pics.')
 draft_parser.set_defaults(func=draft_func)
 draft_parser.add_argument('file_path', type=str)
-draft_parser.add_argument('settings_path', type=str, nargs='?', default='settings.yml',
+draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml',
                           )
 draft_parser.add_argument('-o', '--overwrite', action='store_true')
 

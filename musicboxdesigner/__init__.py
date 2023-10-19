@@ -9,7 +9,7 @@ __all__: list[str] = ['logger',
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 import yaml
 from mido import MidiFile
@@ -19,6 +19,9 @@ from .draft import Draft, DraftSettings, find_available_filename
 from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
+
+
+# from typing import TypeVar
 
 # _T = TypeVar('_T')
 # def _check_overwrite(function: Callable[[str | Path, str | Path], _T]) -> Callable[[str | Path, str | Path, bool], _T]:
@@ -89,9 +92,9 @@ def convert(source: str | Path, destination: str | Path, overwrite=False) -> Non
 
     # 如果未指定特定一个文件，则把 source 目录下所有符合扩展名的文件全部转换
     for path in source.parent.iterdir():
-        if path.suffix == source.suffix:
-            if destination == Path(destination.suffix):  # Purely .suffix
-                temp_destination: Path = source.with_suffix(destination.suffix)  # source_directory/source_name.suffix
+        if path.suffix == pure_suffix(source):
+            if destination == Path(pure_suffix(destination)):
+                temp_destination: Path = path.with_suffix(pure_suffix(destination))  # source_directory/source_name.suffix
             else:  # something/name.suffix
                 temp_destination = destination.with_stem(source.stem)  # something/source_name.suffix
             # 递归调用 convert 单文件的版本
@@ -99,17 +102,17 @@ def convert(source: str | Path, destination: str | Path, overwrite=False) -> Non
 
 
 def generate_draft(file_path: str | Path,
-                   settings_path: str | Path | None = 'draft_settings.yml',
+                   settings_path: str | Path | None = None,
                    overwrite: bool = False,
                    **kwargs) -> None:
     if settings_path is None or not Path(settings_path).is_file():
-        logger.warning('Settings path not specified, using kwargs to initialize DraftSettings.')
-        settings = DraftSettings(**kwargs)
+        logger.warning(f'Settings path not specified, using kwargs {kwargs!r} to initialize DraftSettings.')
+        settings: DraftSettings = DraftSettings(**kwargs)
     else:
         with open(settings_path, 'rb') as fp:
             obj: dict[str, Any] = yaml.safe_load(fp)
         obj.update(kwargs)
-        settings: DraftSettings = DraftSettings.model_validate(obj)
+        settings = DraftSettings.model_validate(obj)
 
     Draft.load_from_file(file_path).export_pics(settings=settings).save(overwrite=overwrite)
 

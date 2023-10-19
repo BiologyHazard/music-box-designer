@@ -10,7 +10,7 @@
 # - 'transparent'
 
 # 页面设置
-# 抗锯齿等级（仅对音符生效）
+# 抗锯齿等级（仅对音符生效），可选值 off, fast, accurate
 anti_alias: fast
 # 图片分辨率，单位像素/英寸
 ppi: 300.0
