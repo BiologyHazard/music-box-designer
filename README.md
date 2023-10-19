@@ -13,7 +13,7 @@
 - 生成纸带设计稿图片
 - 统计音符数量和纸带长度
 
-作者：[BioHazard](https://space.bilibili.com/37179776)
+作者：[BioHazard](https://github.com/BiologyHazard)
 
 - bilibili [Bio-Hazard](https://space.bilibili.com/37179776)
 - QQ [3482991796](https://wpa.qq.com/msgrd?&uin=3482991796)
