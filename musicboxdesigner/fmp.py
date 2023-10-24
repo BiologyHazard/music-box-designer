@@ -132,7 +132,11 @@ default_instrument_cfgs: dict[str, dict[str, str]] = {
         'default_timbre': '233PopRockBank,0',
         'note_trigger_mode': 'Sustain',
         'transpose': '0',
-        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127',
+        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,'
+                 '36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,'
+                 '69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,'
+                 '101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,'
+                 '125,126,127',
     },
     'Instrument_PaperStripMusicBox': {
         'class': 'Instrument_PaperStripMusicBox',
@@ -141,7 +145,11 @@ default_instrument_cfgs: dict[str, dict[str, str]] = {
         'default_timbre': 'WangMusicBox,0',
         'note_trigger_mode': 'Pizzicato',
         'transpose': '0',
-        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127',
+        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,'
+                 '36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,'
+                 '69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,'
+                 '101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,'
+                 '125,126,127',
     }
 }
 
@@ -203,10 +211,10 @@ default_dgstyle_cfg: dict[str, str] = {
 
 @dataclass
 class FmpFile:
-    '''
+    """
     You should not initialize an FmpFile instance directly.
     Use `FmpFile.new(...)` to create one.
-    '''
+    """
     version: tuple[int, int, int] = (3, 0, 0)
     compatible_version: tuple[int, int, int] = (0, 0, 0)
     tempo: int = 500000
@@ -236,7 +244,8 @@ class FmpFile:
             add_channel: bool = True,
             # TODO
             add_empty_track: bool = True) -> Self:
-        # I'm not sure whether change the fmp_file.ticks_per_beat attribute to a value other than FMP_DEFAULT_TICKS_PER_BEAT (=96) is a good behavior. So by now the parameter is not added to this function.
+        # I'm not sure whether change the fmp_file.ticks_per_beat attribute to a value other than
+        # FMP_DEFAULT_TICKS_PER_BEAT (=96) is a good behavior. So by now the parameter is not added to this function.
         fmp_file: Self = cls(title=title,
                              subtitle=subtitle,
                              comment=comment,
@@ -345,7 +354,7 @@ class FmpFile:
 
         # 轨道
         assert file.read(3) == b'TRK'
-        file_magic_num: int = read_int(file, 4)  # file_magic_num = 总音符数*12 + trackname总字节数 + 轨道数*40 + 8
+        file_magic_num: int = read_int(file, 4)  # file_magic_num = 总音符数*12 + track_name总字节数 + 轨道数*40 + 8
         track_count: int = read_int(file, 4)
         for _ in range(track_count):
             track = FmpTrack()
@@ -703,10 +712,10 @@ class FmpFile:
                     offset_global_transpose_config: bool = True,  # 抵消全局移调配置
                     merge_tracks: bool = False,  # TODO
                     ) -> Self:
-        '''
+        """
         This is not a classmethod.
         Use `FmpFile.new(...)` to firstly create an fmp file and then call this method.
-        '''
+        """
         # load title from midi_file.filename
         if override and midi_file.filename is not None:
             try:
@@ -751,14 +760,16 @@ class FmpFile:
                                 except IndexError:
                                     logger.warning(f'No note_on message found to match with {message!r}.')
                                     continue
-                                fmp_track.notes.append(note.copy(duration=round(time * self.ticks_per_beat - note.tick)))
+                                fmp_track.notes.append(note.copy(
+                                    duration=round(time * self.ticks_per_beat - note.tick)))
 
                         case 'track_name':
                             if not fmp_track.name:
                                 fmp_track.name = message.name
 
                         case 'time_signature':
-                            # The first message (if midi_tick == 0) will change the fmp_file.time_signature attribute, and others will be added as FmpBpmTimeSignatureMark.
+                            # The first message (if midi_tick == 0) will change the fmp_file.time_signature
+                            # attribute, and others will be added as FmpBpmTimeSignatureMark.
                             if midi_tick == 0 and 'set_time_signature' not in locals():  # on first change
                                 set_time_signature = True  # or any other value. This variable is just a marker.
                                 self.time_signature = TimeSignature(message.numerator, message.denominator)
@@ -770,7 +781,8 @@ class FmpFile:
                                 ))
 
                         case 'set_tempo':
-                            # The first message (if midi_tick == 0) will change the fmp_file.tempo attribute, and others will be added as FmpBpmTimeSignatureMark.
+                            # The first message (if midi_tick == 0) will change the fmp_file.tempo attribute,
+                            # and others will be added as FmpBpmTimeSignatureMark.
                             if midi_tick == 0 and 'set_tempo' not in locals():  # on first change
                                 set_tempo = True  # or any other value. This variable is just a marker.
                                 self.tempo = message.tempo

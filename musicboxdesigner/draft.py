@@ -5,12 +5,12 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Self
+from typing import Any, Literal, Self, overload
 
 import mido
 import yaml
-from mido import MidiFile
 from PIL import Image, ImageDraw, ImageFont
+from mido import MidiFile
 from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, PositiveInt, field_serializer, field_validator
 from pydantic_extra_types.color import Color
 
@@ -84,7 +84,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     show_note_count: bool = True
     '''是否显示音符数量和纸带长度信息'''
     note_count_format: str = '{note_count} notes / {meter:.2f}m'
-    '''音符数量和纸带长度信息的格式化字符串，支持参数`note_count`, `meter`, `centimeter`和`milimeter`'''
+    '''音符数量和纸带长度信息的格式化字符串，支持参数`note_count`, `meter`, `centimeter`和`millimeter`'''
     tempo_note_count_size: NonNegativeFloat = 3.0
     '''乐曲速度信息、音符数量和纸带长度信息文字大小，单位毫米，将以`round(tempo_note_count_size * ppi / MM_PER_INCH)`转变为像素大小'''
     tempo_note_count_color: Color = Color('black')
@@ -166,13 +166,13 @@ class ImageList(list[Image.Image]):
     file_name: str
 
     def save(self, file_name: str | None = None, overwrite: bool = False) -> None:
-        '''
+        """
         保存图片到文件。
 
         参数：
         - `file_name`：文件保存路径的格式化字符串，例如`'output/pic_{}.png'`。若不指定，则取`self.file_name`
         - `overwrite`：是否允许覆盖同名文件，默认为`False`
-        '''
+        """
         if file_name is None:
             file_name = self.file_name
         for i, image in enumerate(self):
@@ -250,7 +250,8 @@ class Draft:
                 if (pitch := EMID_PITCHES[note.emid_pitch] + transposition) in MUSIC_BOX_30_NOTES_PITCH:
                     self.notes.append(Note(pitch, note.tick / EMID_TICKS_PER_BEAT))
                 else:
-                    logger.warning(f'Note {pitch} in bar {math.floor(note.tick / EMID_TICKS_PER_BEAT / 4) + 1} is out of range')
+                    logger.warning(
+                        f'Note {pitch} in bar {math.floor(note.tick / EMID_TICKS_PER_BEAT / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -279,7 +280,9 @@ class Draft:
                 if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
                     self.notes.append(Note(note.pitch + transposition, note.tick / fmp_file.ticks_per_beat))
                 else:
-                    logger.warning(f'Note {note.pitch + transposition} in bar {math.floor(note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
+                    logger.warning(
+                        f'Note {note.pitch + transposition} in bar {math.floor(
+                            note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -293,7 +296,6 @@ class Draft:
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
                        bpm: float | None = None) -> Self:
-
         self: Self = cls()
         if midi_file.filename is not None:
             try:
@@ -424,7 +426,7 @@ class Draft:
                         note_count=len(self.notes),
                         meter=length_mm / 1000,
                         centimeter=length_mm / 100,
-                        milimeter=length_mm,
+                        millimeter=length_mm,
                     )
                     try:
                         note_count_text: str = settings.note_count_format.format(**format_dict)
@@ -508,10 +510,10 @@ class Draft:
             for j in range(num + 1):
                 draw.line((pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
                                             up_margin),
-                                           settings.ppi, True),
+                                           settings.ppi, 'floor'),
                            pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
                                             page_height - down_margin),
-                                           settings.ppi, True)),
+                                           settings.ppi, 'floor')),
                           settings.separating_line_color.as_hex(), 1)
 
         # 页眉
@@ -629,10 +631,10 @@ class Draft:
                     draw.line(
                         (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
                                           current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, True),
+                                         settings.ppi, 'floor'),
                          pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
                                           current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, True)),
+                                         settings.ppi, 'floor')),
                         settings.whole_beat_line_color.as_hex(), 1,
                     )
                 # 半拍横线
@@ -641,11 +643,11 @@ class Draft:
                         case 'solid':
                             draw.line(
                                 (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                 settings.ppi, True),
+                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                 settings.ppi, 'floor'),
                                  pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                 settings.ppi, True)),
+                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                 settings.ppi, 'floor')),
                                 settings.half_beat_line_color.as_hex(), 1,
                             )
                         case 'dashed':
@@ -653,23 +655,23 @@ class Draft:
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, True),
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 1 + 1/2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, True)),
+                                                      + (part * 5 + 1 + 1 / 2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 2 + 1/2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, True),
+                                                      + (part * 5 + 2 + 1 / 2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5 + 4) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, True)),
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                     settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                         case _:
@@ -679,10 +681,10 @@ class Draft:
                     draw.line(
                         (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
                                           current_col_y),
-                                         settings.ppi, True),
+                                         settings.ppi, 'floor'),
                          pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
                                           current_col_y + current_col_rows * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, True)),
+                                         settings.ppi, 'floor')),
                         settings.vertical_line_color.as_hex(), 1,
                     )
 
@@ -719,7 +721,7 @@ class Draft:
         for note in self.notes:
             try:
                 index: int = MUSIC_BOX_30_NOTES_PITCH.index(note.pitch)
-            except:
+            except ValueError:
                 logger.warning(f'{note} out of range, SKIPPING!')
                 continue
             col: int = math.floor((note.time * scale - first_col_rows + rows_per_col) / rows_per_col)
@@ -731,20 +733,20 @@ class Draft:
                                  (note.time * scale - first_col_rows + rows_per_col) % rows_per_col)
             draw_circle(
                 images[page],
-                (mm_to_pixel(first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + index * GRID_WIDTH, settings.ppi),
-                 mm_to_pixel(current_col_y + row_in_col * LENGTH_MM_PER_BEAT, settings.ppi)),
+                pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + index * GRID_WIDTH,
+                                 current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi, None),
                 mm_to_pixel(settings.note_radius, settings.ppi),
                 settings.note_color.as_hex(),
                 anti_alias=settings.anti_alias,
             )
 
         if isinstance(settings.background, Image.Image):
-            backgrond_image: Image.Image = settings.background.convert('RGBA').resize(image_size)
+            background_image: Image.Image = settings.background.convert('RGBA').resize(image_size)
         else:
-            backgrond_image = Image.new('RGBA', image_size, settings.background.as_hex())
+            background_image = Image.new('RGBA', image_size, settings.background.as_hex())
 
         logger.info('Compositing images...')
-        image_list = ImageList(Image.alpha_composite(backgrond_image, image) for image in images)
+        image_list = ImageList(Image.alpha_composite(background_image, image) for image in images)
         if self.file_path is None:
             image_list.file_name = make_valid_filename(f'{title}_{{}}.png')
         else:
@@ -752,13 +754,13 @@ class Draft:
         return image_list
 
 
-def make_valid_filename(s) -> str:
-    return re.sub(r'[\/:*?"<>|]', '_', s)
+def make_valid_filename(s: str) -> str:
+    return re.sub(r'[\\/:*?"<>|]', '_', s)
 
 
-def find_available_filename(path: str | Path) -> Path:
+def find_available_filename(path: str | Path, overwrite: bool = False) -> Path:
     path = Path(path)
-    if not path.exists():
+    if overwrite or not path.exists():
         return path
     i = 1
     while (new_path := path.with_stem(f'{path.stem} ({i})')).exists():
@@ -820,24 +822,43 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
     return x * MM_PER_INCH / ppi
 
 
-def pos_mm_to_pixel(pos: tuple[float, float], ppi: float, minus_a_half: bool = False) -> tuple[int, int]:
+@overload
+def pos_mm_to_pixel(pos: tuple[float, float],
+                    ppi: float,
+                    method: None = ...) -> tuple[float, float]:
+    ...
+
+
+@overload
+def pos_mm_to_pixel(pos: tuple[float, float],
+                    ppi: float,
+                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]:
+    ...
+
+
+def pos_mm_to_pixel(pos: tuple[float, float],
+                    ppi: float,
+                    method: Literal['floor', 'round', None] = 'round') -> tuple[float, float]:
     x, y = pos
-    if minus_a_half:
-        return (math.floor(mm_to_pixel(x, ppi)), math.floor(mm_to_pixel(y, ppi)))
-    else:
-        return (round(mm_to_pixel(x, ppi)), round(mm_to_pixel(y, ppi)))
+    match method:
+        case None:
+            return (mm_to_pixel(x, ppi), mm_to_pixel(y, ppi))
+        case 'floor':
+            return (math.floor(mm_to_pixel(x, ppi)), math.floor(mm_to_pixel(y, ppi)))
+        case 'round':
+            return (round(mm_to_pixel(x, ppi)), round(mm_to_pixel(y, ppi)))
+        case _:
+            raise ValueError
 
 
 @lru_cache
-def get_empty_draw() -> ImageDraw.ImageDraw:
+def _get_empty_draw() -> ImageDraw.ImageDraw:
     return ImageDraw.Draw(Image.new('RGBA', (0, 0)))
 
 
-def get_text_height(text: str, font: ImageFont.FreeTypeFont, **kwargs) -> int:
-    return (
-        get_empty_draw().multiline_textbbox((0, 0), text, font, 'la', **kwargs)[3]
-        - get_empty_draw().multiline_textbbox((0, 0), text, font, 'ld', **kwargs)[3]
-    )
+def get_text_height(text: str, font: ImageFont.FreeTypeFont, **kwargs: Any) -> int:
+    return (_get_empty_draw().multiline_textbbox((0, 0), text, font, 'la', **kwargs)[3]
+            - _get_empty_draw().multiline_textbbox((0, 0), text, font, 'ld', **kwargs)[3])
 
 
 def calc_alpha(radius: float, distance: float) -> float:
@@ -860,7 +881,10 @@ def mix_number(foreground: float, background: float, alpha: float) -> float:
 #     return tuple(round(y) for y in x)
 
 
-def _get_circle_image(mode, center: tuple[float, float], radius: float, color) -> tuple[Image.Image, tuple[int, int]]:
+def _get_circle_image(mode: str,
+                      center: tuple[float, float],
+                      radius: float,
+                      color) -> tuple[Image.Image, tuple[int, int]]:
     center_x, center_y = center
     left_x: int = math.floor(center_x - radius)
     right_x: int = math.ceil(center_x + radius)
@@ -885,12 +909,18 @@ def _get_circle_image(mode, center: tuple[float, float], radius: float, color) -
 
 
 @lru_cache
-def _get_circle_image_with_cache(*args, **kwargs) -> tuple[Image.Image, tuple[int, int]]:
-    return _get_circle_image(*args, **kwargs)
+def _get_circle_image_with_cache(mode: str,
+                                 center: tuple[float, float],
+                                 radius: float,
+                                 color: Any) -> tuple[Image.Image, tuple[int, int]]:
+    return _get_circle_image(mode, center, radius, color)
 
 
-def get_circle_image(mode, center: tuple[float, float], radius: float, color) -> tuple[Image.Image, tuple[int, int]]:
-    if center == (1/2, 1/2):
+def get_circle_image(mode: str,
+                     center: tuple[float, float],
+                     radius: float,
+                     color) -> tuple[Image.Image, tuple[int, int]]:
+    if center == (1 / 2, 1 / 2):
         return _get_circle_image_with_cache(mode, center, radius, color)
     else:
         return _get_circle_image(mode, center, radius, color)

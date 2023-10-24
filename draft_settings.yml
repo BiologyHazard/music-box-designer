@@ -64,7 +64,7 @@ show_tempo: true
 tempo_format: '{bpm:.0f}bpm'
 # 是否显示音符数量和纸带长度信息
 show_note_count: true
-# 音符数量和纸带长度信息的格式化字符串，支持参数 note_count, meter, centimeter 和 milimeter
+# 音符数量和纸带长度信息的格式化字符串，支持参数 note_count, meter, centimeter 和 millimeter
 note_count_format: '{note_count} notes / {meter:.2f}m'
 # 乐曲速度信息、音符数量和纸带长度信息文字大小，单位毫米，将以 round(tempo_note_count_size * ppi / MM_PER_INCH) 转变为像素大小
 tempo_note_count_size: 3.0

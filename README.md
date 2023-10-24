@@ -7,6 +7,19 @@
 
 </div>
 
+* [说明](#说明)
+* [提示](#提示)
+* [快速上手](#快速上手)
+    * [安装](#安装)
+        * [方法 1. 由可执行文件直接运行（仅 Windows 系统）](#方法-1-由可执行文件直接运行仅-windows-系统)
+        * [方法 2. 从源码运行](#方法-2-从源码运行)
+    * [教程](#教程)
+* [代码示例](#代码示例)
+* [Issue](#issue)
+* [TODO](#todo)
+
+# 说明
+
 主要功能
 
 - .mid, .emid, .fmp 文件之间互相转换
@@ -22,7 +35,6 @@
 FairyMusicBox 官网：<http://www.fairymusicbox.com/>
 
 FairyMusicBox 系列软件作者：[bilibili@调皮的码农](https://space.bilibili.com/40962795)
-
 
 # 提示
 
@@ -63,7 +75,7 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
 
     如果报错或者超时，请点击 [Download ZIP](https://github.com/BiologyHazard/MusicBoxDesigner/archive/refs/heads/main.zip) 下载源代码并解压。
 
-1. 安装 Python（3.12及以上）
+2. 安装 Python（3.12及以上）
 
     - Windows 系统
 
@@ -88,7 +100,7 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
     ```
     检查是否安装成功。
 
-1. pip 安装依赖
+3. pip 安装依赖
 
     运行命令
     ```bash
@@ -208,9 +220,9 @@ python main.py --help
 - [x] 自定义水印
 - [x] 显示小节号
 - [x] 更多的快捷方法以及批处理方法
-- [ ] 用户友好的 README
+- [x] 用户友好的 README
 - [ ] 自动打包
-- [ ] main.py
+- [x] main.py
 - [ ] 支持 fmp 标记
 - [ ] interactive mode
 

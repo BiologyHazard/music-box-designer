@@ -43,12 +43,14 @@ convert_parser.set_defaults(func=convert_func)
 convert_parser.add_argument(
     'source',
     type=str,
-    help="Specify the source file path, or just the extension (including the leading '.', e.g. 'directory/*.fmp', which will convert all .fmp files in directory/).",
+    help="Specify the source file path, or just the extension (including the leading '.', e.g. 'directory/*.fmp', "
+         "which will convert all .fmp files in directory/).",
 )
 convert_parser.add_argument(
     'destination',
     type=str,
-    help="If source specified a file, destination can either be a path or an extension. If source provided an extension, destination should be a different extension.",
+    help="If source specified a file, destination can either be a path or an extension. If source provided an "
+         "extension, destination should be a different extension.",
 )
 convert_parser.add_argument('-o', '--overwrite', action='store_true')
 

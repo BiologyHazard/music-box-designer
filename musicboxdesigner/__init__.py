@@ -20,16 +20,18 @@ from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
 
-
 # from typing import TypeVar
 
 # _T = TypeVar('_T')
-# def _check_overwrite(function: Callable[[str | Path, str | Path], _T]) -> Callable[[str | Path, str | Path, bool], _T]:
+# def _check_overwrite(
+#         function: Callable[[str | Path, str | Path], _T]
+#     ) -> Callable[[str | Path, str | Path, bool], _T]:
 #     def wrapper(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> _T:
 #         if not overwrite:
 #             destination_file_path = find_available_filename(destination_file_path)
 #         return function(source_file_path, destination_file_path)
 #     return wrapper
+
 
 _SUPPORTED_SUFFIXES: list[str] = ['.emid', '.fmp', '.mid']
 
@@ -94,7 +96,8 @@ def convert(source: str | Path, destination: str | Path, overwrite=False) -> Non
     for path in source.parent.iterdir():
         if path.suffix == pure_suffix(source):
             if destination == Path(pure_suffix(destination)):
-                temp_destination: Path = path.with_suffix(pure_suffix(destination))  # source_directory/source_name.suffix
+                temp_destination: Path = path.with_suffix(
+                    pure_suffix(destination))  # source_directory/source_name.suffix
             else:  # something/name.suffix
                 temp_destination = destination.with_stem(source.stem)  # something/source_name.suffix
             # 递归调用 convert 单文件的版本
