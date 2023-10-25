@@ -534,10 +534,10 @@ class Draft:
                     title_anchor: str = 'la'
                 elif settings.title_align == 'center':
                     title_x = first_col_x + COL_WIDTH / 2
-                    title_anchor: str = 'ma'
+                    title_anchor = 'ma'
                 elif settings.title_align == 'right':
                     title_x = first_col_x + COL_WIDTH - RIGHT_BORDER
-                    title_anchor: str = 'ra'
+                    title_anchor = 'ra'
                 else:
                     raise ValueError
 
@@ -551,10 +551,10 @@ class Draft:
                     subtitle_anchor: str = 'la'
                 elif settings.subtitle_align == 'center':
                     subtitle_x = first_col_x + COL_WIDTH / 2
-                    subtitle_anchor: str = 'ma'
+                    subtitle_anchor = 'ma'
                 elif settings.subtitle_align == 'right':
                     subtitle_x = first_col_x + COL_WIDTH - RIGHT_BORDER
-                    subtitle_anchor: str = 'ra'
+                    subtitle_anchor = 'ra'
                 else:
                     raise ValueError
 
@@ -643,10 +643,10 @@ class Draft:
                         case 'solid':
                             draw.line(
                                 (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                  settings.ppi, 'floor'),
                                  pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                  settings.ppi, 'floor')),
                                 settings.half_beat_line_color.as_hex(), 1,
                             )
@@ -655,22 +655,22 @@ class Draft:
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 1 + 1 / 2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                      + (part * 5 + 1 + 1/2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 2 + 1 / 2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                      + (part * 5 + 2 + 1/2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5 + 4) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
+                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
@@ -825,20 +825,18 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: None = ...) -> tuple[float, float]:
-    ...
+                    method: None = ...) -> tuple[float, float]: ...
 
 
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]:
-    ...
+                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]: ...
 
 
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: Literal['floor', 'round', None] = 'round') -> tuple[float, float]:
+                    method: Literal['floor', 'round', None] = 'round') -> tuple[float, float] | tuple[int, int]:
     x, y = pos
     match method:
         case None:
@@ -920,7 +918,7 @@ def get_circle_image(mode: str,
                      center: tuple[float, float],
                      radius: float,
                      color) -> tuple[Image.Image, tuple[int, int]]:
-    if center == (1 / 2, 1 / 2):
+    if center == (1/2, 1/2):
         return _get_circle_image_with_cache(mode, center, radius, color)
     else:
         return _get_circle_image(mode, center, radius, color)

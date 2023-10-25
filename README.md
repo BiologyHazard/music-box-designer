@@ -60,9 +60,9 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是 PDF 格式的，更便于阅读�
 
 ### 方法 1. 由可执行文件直接运行（仅 Windows 系统）
 
-点击 [Latest Release](https://github.com/BiologyHazard/MusicBoxDesigner/releases/latest)，在页面下方的 Assets 中下载 main-\<version>.exe，搞定！
+点击 [Latest Release](https://github.com/BiologyHazard/MusicBoxDesigner/releases/latest)，在页面下方的 Assets 中下载 main-\<version>.zip，并解压。
 
-（但是不能直接双击运行，因为你还没告诉程序要干什么）
+（但是不能直接双击运行，因为你还没告诉程序要干什么，接着往下看吧）
 
 ### 方法 2. 从源码运行
 
@@ -155,7 +155,6 @@ python main.py --help
 - 把 examples/example.emid 转换成 midi 格式并保存到 examples/example.mid
 
     ```python
-    from mido import MidiFile
     from musicboxdesigner.emid import EmidFile
 
     emid_file = EmidFile.load_from_file('examples/example.emid')
@@ -194,11 +193,12 @@ python main.py --help
 - 从 examples/example.mid 生成纸带设计稿
 
     ```python
+    import yaml
     from musicboxdesigner.draft import Draft, DraftSettings
 
     # load settings from draft_settings.yml
     with open('draft_settings.yml', 'rb') as fp:
-        obj: dict[str, Any] = yaml.safe_load(fp)
+        obj = yaml.safe_load(fp)
     settings: DraftSettings = DraftSettings.model_validate(obj)
 
     # or just create a DraftSettings instance with default or custom values
@@ -213,7 +213,7 @@ python main.py --help
 
 # Issue
 
-如果在使用过程中遇到了问题，请点击页面顶部的 Issue -> New Issue，并详细描述您的问题。
+如果在使用过程中遇到了问题，请点击页面顶部的 Issue → New Issue，并详细描述您的问题。
 
 # TODO
 

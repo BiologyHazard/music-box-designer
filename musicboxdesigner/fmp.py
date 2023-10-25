@@ -242,7 +242,6 @@ class FmpFile:
             subtitle: str = '',
             comment: str = '',
             add_channel: bool = True,
-            # TODO
             add_empty_track: bool = True) -> Self:
         # I'm not sure whether change the fmp_file.ticks_per_beat attribute to a value other than
         # FMP_DEFAULT_TICKS_PER_BEAT (=96) is a good behavior. So by now the parameter is not added to this function.
@@ -818,6 +817,9 @@ class FmpFile:
             self.tracks.extend(new_tracks)
             self.time_marks.extend(new_time_marks)
         self.time_marks.sort(key=lambda time_mark: time_mark.tick)
+
+        if merge_tracks:
+            raise NotImplementedError
 
         return self
 
