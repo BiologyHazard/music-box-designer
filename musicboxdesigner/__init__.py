@@ -36,28 +36,41 @@ from .log import logger
 _SUPPORTED_SUFFIXES: list[str] = ['.emid', '.fmp', '.mid']
 
 
-def emid_to_midi(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> None:
+def emid_to_midi(source_file_path: str | Path,
+                 destination_file_path: str | Path,
+                 transposition: int = 0,
+                 overwrite: bool = False) -> None:
     if not overwrite:
         destination_file_path = find_available_filename(destination_file_path)
-    EmidFile.load_from_file(source_file_path).export_midi().save(destination_file_path)
+    EmidFile.load_from_file(source_file_path).export_midi(transposition=transposition).save(destination_file_path)
 
 
-def midi_to_emid(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> None:
+def midi_to_emid(source_file_path: str | Path,
+                 destination_file_path: str | Path,
+                 transposition: int = 0,
+                 overwrite: bool = False) -> None:
     if not overwrite:
         destination_file_path = find_available_filename(destination_file_path)
-    EmidFile.from_midi(MidiFile(source_file_path)).save_to_file(destination_file_path)
+    EmidFile.from_midi(MidiFile(source_file_path), transposition=transposition).save_to_file(destination_file_path)
 
 
-def fmp_to_midi(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> None:
+def fmp_to_midi(source_file_path: str | Path,
+                destination_file_path: str | Path,
+                transposition: int = 0,
+                overwrite: bool = False) -> None:
     if not overwrite:
         destination_file_path = find_available_filename(destination_file_path)
-    FmpFile.load_from_file(source_file_path).export_midi().save(destination_file_path)
+    FmpFile.load_from_file(source_file_path).export_midi(transposition=transposition).save(destination_file_path)
 
 
-def midi_to_fmp(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> None:
+def midi_to_fmp(source_file_path: str | Path,
+                destination_file_path: str | Path,
+                transposition: int = 0,
+                overwrite: bool = False) -> None:
     if not overwrite:
         destination_file_path = find_available_filename(destination_file_path)
-    FmpFile.new('Instrument').import_midi(MidiFile(source_file_path)).save_to_file(destination_file_path)
+    FmpFile.new('Instrument').import_midi(
+        MidiFile(source_file_path), transposition=transposition).save_to_file(destination_file_path)
 
 
 _FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, bool], None]] = {
@@ -68,7 +81,10 @@ _FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, bool], None]
 }
 
 
-def convert(source: str | Path, destination: str | Path, overwrite=False) -> None:
+def convert(source: str | Path,
+            destination: str | Path,
+            transposition: int = 0,
+            overwrite: bool = False) -> None:
     def pure_suffix(path: Path) -> str:
         if '.' in path.name:
             return f'.{path.name.rsplit('.', maxsplit=1)[1]}'
@@ -106,6 +122,15 @@ def convert(source: str | Path, destination: str | Path, overwrite=False) -> Non
 
 def generate_draft(file_path: str | Path,
                    settings_path: str | Path | None = None,
+                   transposition: int = 0,
+                   remove_blank: bool = True,
+                   skip_near_notes: bool = True,
+                   bpm: float | None = None,
+                   title: str | None = None,
+                   subtitle: str | None = None,
+                   music_info: str | None = None,
+                   show_bpm: float | None = None,
+                   scale: float = 1,
                    overwrite: bool = False,
                    **kwargs) -> None:
     if settings_path is None or not Path(settings_path).is_file():
@@ -117,7 +142,20 @@ def generate_draft(file_path: str | Path,
         obj.update(kwargs)
         settings = DraftSettings.model_validate(obj)
 
-    Draft.load_from_file(file_path).export_pics(settings=settings).save(overwrite=overwrite)
+    Draft.load_from_file(
+        file_path,
+        transposition=transposition,
+        remove_blank=remove_blank,
+        skip_near_notes=skip_near_notes,
+        bpm=bpm,
+    ).export_pics(
+        settings=settings,
+        title=title,
+        subtitle=subtitle,
+        music_info=music_info,
+        show_bpm=show_bpm,
+        scale=scale,
+    ).save(overwrite=overwrite)
 
 
 def get_note_count_and_length(file_path: str | Path,

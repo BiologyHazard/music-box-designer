@@ -4,21 +4,34 @@ from musicboxdesigner import convert, generate_draft, get_note_count_and_length,
 
 
 def convert_func(args) -> None:
-    return convert(args.source, args.destination, args.overwrite)
+    return convert(args.source, args.destination, transposition=args.transposition, overwrite=args.overwrite)
 
 
 def draft_func(args) -> None:
-    return generate_draft(args.file_path, args.settings_path, args.overwrite)
+    return generate_draft(
+        file_path=args.file_path,
+        settings_path=args.settings_path,
+        transposition=args.transposition,
+        remove_blank=not args.keep_blank,
+        skip_near_notes=not args.keep_near_notes,
+        bpm=args.bpm,
+        title=args.title,
+        subtitle=args.subtitle,
+        music_info=args.music_info,
+        show_bpm=args.show_bpm,
+        scale=args.scale,
+        overwrite=args.overwrite,
+    )
 
 
 def count_func(args) -> None:
     note_count, length_mm = get_note_count_and_length(
-        args.file_path,
-        args.transposition,
-        not args.keep_blank,
-        not args.keep_near_notes,
-        args.bpm,
-        args.scale,
+        file_path=args.file_path,
+        transposition=args.transposition,
+        remove_blank=not args.keep_blank,
+        skip_near_notes=not args.keep_near_notes,
+        bpm=args.bpm,
+        scale=args.scale,
     )
     print(f'Notes: {note_count}')
     print(f'Length: {length_mm / 1000:.2f}m')
@@ -52,13 +65,22 @@ convert_parser.add_argument(
     help="If source specified a file, destination can either be a path or an extension. If source provided an "
          "extension, destination should be a different extension.",
 )
+convert_parser.add_argument('-t', '--transposition', type=int, default=0)
 convert_parser.add_argument('-o', '--overwrite', action='store_true')
 
 draft_parser = subparsers.add_parser('draft', help='Generate draft pics.')
 draft_parser.set_defaults(func=draft_func)
 draft_parser.add_argument('file_path', type=str)
-draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml',
-                          )
+draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml')
+draft_parser.add_argument('-t', '--transposition', type=int, default=0)
+draft_parser.add_argument('-k', '--keep-blank', action='store_true')
+draft_parser.add_argument('-n', '--keep-near-notes', action='store_true')
+draft_parser.add_argument('-b', '--bpm', type=float, default=None)
+draft_parser.add_argument('--title', type=str)
+draft_parser.add_argument('--subtitle', type=str)
+draft_parser.add_argument('--music-info', type=str)
+draft_parser.add_argument('--show-bpm', type=float)
+draft_parser.add_argument('-s', '--scale', type=float, default=1)
 draft_parser.add_argument('-o', '--overwrite', action='store_true')
 
 count_parser = subparsers.add_parser('count', help='Count notes and length.')

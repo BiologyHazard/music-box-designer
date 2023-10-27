@@ -177,10 +177,10 @@ class ImageList(list[Image.Image]):
             file_name = self.file_name
         for i, image in enumerate(self):
             if overwrite:
-                path_to_save: Path = Path(file_name.format(i+1))
+                path_to_save: Path = Path(file_name.format(i + 1))
             else:
-                path_to_save = find_available_filename(file_name.format(i+1))
-            logger.info(f'Saving image {i+1} of {len(self)} to {path_to_save.as_posix()!r}...')
+                path_to_save = find_available_filename(file_name.format(i + 1))
+            logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()!r}...')
             image.save(path_to_save)
 
 
@@ -362,11 +362,11 @@ class Draft:
         self.notes = new_notes
 
     def export_pics(self,
+                    settings: DraftSettings | None = None,
                     title: str | None = None,
                     subtitle: str | None = None,
                     music_info: str | None = None,
                     show_bpm: float | None = None,
-                    settings: DraftSettings | None = None,
                     scale: float = 1,
                     ) -> ImageList:
         # 由于在一拍当中插入时间标记会导致网格的错乱，故暂时不支持在乐曲中间更改时间标记。
@@ -456,7 +456,7 @@ class Draft:
             rows_per_col: int = math.floor((page_height - up_margin - down_margin) / LENGTH_MM_PER_BEAT)
             cols_per_page: int = math.floor((page_width - left_margin - right_margin) / COL_WIDTH)
             first_col_rows: int = max(math.floor((page_height - down_margin - body_y) / LENGTH_MM_PER_BEAT), 0)
-            cols: int = (rows + rows_per_col - first_col_rows) // rows_per_col + 1
+            cols: int = math.ceil((rows + rows_per_col - first_col_rows) / rows_per_col)
             pages: int = math.ceil(cols / cols_per_page)
             last_page_cols: int = cols - (pages - 1) * cols_per_page
         else:
@@ -470,13 +470,22 @@ class Draft:
         if next_body_y + first_col_rows * LENGTH_MM_PER_BEAT + down_margin <= page_height:
             body_y = next_body_y
 
+        logger.debug(f'rows: {rows}')
+        logger.debug(f'rows_per_col: {rows_per_col}')
+        logger.debug(f'cols_per_page: {cols_per_page}')
+        logger.debug(f'first_col_rows: {first_col_rows}')
+        logger.debug(f'last_page_cols: {last_page_cols}')
+        logger.debug(f'first_col_x: {first_col_x}')
+        logger.debug(f'first_row_y: {first_row_y}')
+        logger.debug(f'body_y: {body_y}')
+
         logger.info(f'Notes: {len(self.notes)}')
         logger.info(f'Length: {length_mm / 1000:.2f}m')
         logger.info(f'Cols: {cols}')
         logger.info(f'Pages: {pages}')
 
         # 构建图片列表
-        image_size: tuple[int, int] = pos_mm_to_pixel((page_width, page_height), settings.ppi)
+        image_size: tuple[int, int] = pos_mm_to_pixel((page_width, page_height), settings.ppi, 'round')
         images: list[Image.Image] = [Image.new('RGBA', image_size, '#00000000') for _ in range(pages)]
         draws: list[ImageDraw.ImageDraw] = [ImageDraw.Draw(image) for image in images]
 
@@ -494,7 +503,7 @@ class Draft:
                 row_in_col: float = (row if col == 0 else
                                      (row - first_col_rows + rows_per_col) % rows_per_col)
                 draws[page].text(
-                    pos_mm_to_pixel((first_col_x + (col_in_page + 1/2) * COL_WIDTH,
+                    pos_mm_to_pixel((first_col_x + (col_in_page + 1 / 2) * COL_WIDTH,
                                      current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi),
                     settings.custom_watermark,
                     settings.custom_watermark_color.as_hex(),
@@ -589,7 +598,7 @@ class Draft:
                     for i, char in enumerate(f'{music_info}{page * cols_per_page + col_in_page + 1}'):
                         draw.text(pos_mm_to_pixel(
                             (first_col_x + (col_in_page + 1) * COL_WIDTH - RIGHT_BORDER - LENGTH_MM_PER_BEAT / 2,
-                             current_col_y + (i + 1/2) * LENGTH_MM_PER_BEAT),
+                             current_col_y + (i + 1 / 2) * LENGTH_MM_PER_BEAT),
                             settings.ppi,
                         ), char, settings.column_info_color.as_hex(), column_info_font, 'mm')
 
@@ -613,7 +622,7 @@ class Draft:
                     (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
                      current_col_bottom_y),
                     settings.ppi,
-                ), f'{col+1}', 'black', page_num_font, 'la')
+                ), f'{col + 1}', 'black', page_num_font, 'la')
 
         logger.debug('Drawing lines...')
         for page, draw in enumerate(draws):
@@ -643,10 +652,10 @@ class Draft:
                         case 'solid':
                             draw.line(
                                 (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                  settings.ppi, 'floor'),
                                  pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                                  current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                  settings.ppi, 'floor')),
                                 settings.half_beat_line_color.as_hex(), 1,
                             )
@@ -655,22 +664,22 @@ class Draft:
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 1 + 1/2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                      + (part * 5 + 1 + 1 / 2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                                 draw.line(
                                     (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 2 + 1/2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                      + (part * 5 + 2 + 1 / 2) * GRID_WIDTH,
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor'),
                                      pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
                                                       + (part * 5 + 4) * GRID_WIDTH,
-                                                      current_col_y + (row + 1/2) * LENGTH_MM_PER_BEAT),
+                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
                                                      settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
@@ -788,8 +797,8 @@ def get_tempo_events(midi_file: MidiFile, bpm: float, ticks_per_beat: int) -> li
 
     time_passed: float = 0.0
     for i in range(1, len(tempo_events)):
-        tempo: float = tempo_events[i-1].tempo
-        delta_midi_tick: int = tempo_events[i].midi_tick - tempo_events[i-1].midi_tick
+        tempo: float = tempo_events[i - 1].tempo
+        delta_midi_tick: int = tempo_events[i].midi_tick - tempo_events[i - 1].midi_tick
         time_passed += mido.tick2second(delta_midi_tick, ticks_per_beat, tempo)
         tempo_events[i].time_passed = time_passed
     return tempo_events
@@ -825,13 +834,15 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: None = ...) -> tuple[float, float]: ...
+                    method: None = ...) -> tuple[float, float]:
+    ...
 
 
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]: ...
+                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]:
+    ...
 
 
 def pos_mm_to_pixel(pos: tuple[float, float],
@@ -860,11 +871,11 @@ def get_text_height(text: str, font: ImageFont.FreeTypeFont, **kwargs: Any) -> i
 
 
 def calc_alpha(radius: float, distance: float) -> float:
-    if distance <= radius - 1/2:
+    if distance <= radius - 1 / 2:
         return 1
-    if distance >= radius + 1/2:
+    if distance >= radius + 1 / 2:
         return 0
-    return radius + 1/2 - distance
+    return radius + 1 / 2 - distance
 
 
 def mix_number(foreground: float, background: float, alpha: float) -> float:
@@ -896,7 +907,7 @@ def _get_circle_image(mode: str,
     draw: ImageDraw.ImageDraw = ImageDraw.Draw(mask)
     for x in range(mask_width):
         for y in range(mask_height):
-            distance: float = math.dist((center_in_mask_x, center_in_mask_y), (x + 1/2, y + 1/2))
+            distance: float = math.dist((center_in_mask_x, center_in_mask_y), (x + 1 / 2, y + 1 / 2))
             alpha: float = calc_alpha(radius, distance)
             mask_color: float = mix_number(0, 255, alpha)
             draw.point((x, y), round(mask_color))
@@ -918,7 +929,7 @@ def get_circle_image(mode: str,
                      center: tuple[float, float],
                      radius: float,
                      color) -> tuple[Image.Image, tuple[int, int]]:
-    if center == (1/2, 1/2):
+    if center == (1 / 2, 1 / 2):
         return _get_circle_image_with_cache(mode, center, radius, color)
     else:
         return _get_circle_image(mode, center, radius, color)
@@ -939,7 +950,7 @@ def draw_circle(image: Image.Image,
 
         case 'fast':
             center_x, center_y = center
-            circle_image, destination = get_circle_image(image.mode, (1/2, 1/2), radius, color)
+            circle_image, destination = get_circle_image(image.mode, (1 / 2, 1 / 2), radius, color)
             delta_x, delta_y = destination
             image.alpha_composite(circle_image, (math.floor(center_x) + delta_x, math.floor(center_y) + delta_y))
 
