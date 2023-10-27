@@ -164,7 +164,11 @@ def get_note_count_and_length(file_path: str | Path,
                               skip_near_notes: bool = True,
                               bpm: float | None = None,
                               scale: float = 1) -> tuple[int, float]:
-    draft: Draft = Draft.load_from_file(file_path, transposition, remove_blank, skip_near_notes, bpm)
+    draft: Draft = Draft.load_from_file(file_path,
+                                        transposition=transposition,
+                                        remove_blank=remove_blank,
+                                        skip_near_notes=skip_near_notes,
+                                        bpm=bpm)
     if draft.notes:
         length: float = draft.notes[-1].time * LENGTH_MM_PER_BEAT * scale
     else:
