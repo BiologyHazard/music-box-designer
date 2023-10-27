@@ -128,7 +128,7 @@ class EmidFile:
                     if message.velocity == 0:
                         continue
                     if message.note + transposition not in EMID_PITCHES:
-                        logger.warning('note out of range!')
+                        logger.warning(f'note {message.note + transposition} out of range!')
                         continue
                     tick: int = round(midi_tick / midi_file.ticks_per_beat * EMID_TICKS_PER_BEAT)
                     emid_track.notes.append(EmidNote(

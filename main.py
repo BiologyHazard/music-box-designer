@@ -52,8 +52,7 @@ convert_parser = subparsers.add_parser(
   {parser.prog} convert examples/example.emid examples/example.mid
   {parser.prog} convert examples/example.emid .mid    # equivalent to the previous command
   {parser.prog} convert examples/*.mid examples/*.fmp
-  {parser.prog} convert examples/*.mid .fmp    # equivalent to the previous command
-''',
+  {parser.prog} convert examples/*.mid .fmp    # equivalent to the previous command''',
     formatter_class=argparse.RawDescriptionHelpFormatter,
 )
 convert_parser.set_defaults(func=convert_func)
@@ -101,9 +100,10 @@ count_parser.add_argument('-s', '--scale', type=float, default=1)
 def main() -> None:
     args = parser.parse_args()
     set_level(args.log_level)
-    return args.func(args)
+    result = args.func(args)
+    logger.success('Done!')
+    return result
 
 
 if __name__ == '__main__':
     main()
-    logger.success('Done!')

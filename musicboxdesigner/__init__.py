@@ -73,7 +73,7 @@ def midi_to_fmp(source_file_path: str | Path,
         MidiFile(source_file_path), transposition=transposition).save_to_file(destination_file_path)
 
 
-_FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, bool], None]] = {
+_FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, int, bool], None]] = {
     ('.emid', '.mid'): emid_to_midi,
     ('.mid', '.emid'): midi_to_emid,
     ('.fmp', '.mid'): fmp_to_midi,
@@ -106,7 +106,7 @@ def convert(source: str | Path,
         function = _FUNCTIONS.get((pure_suffix(source), pure_suffix(destination)))
         if function is None:
             raise ValueError(f"Cannot convert '{pure_suffix(source)}' file to '{pure_suffix(destination)}' file.")
-        return function(source, destination, overwrite)
+        return function(source, destination, transposition, overwrite)
 
     # 如果未指定特定一个文件，则把 source 目录下所有符合扩展名的文件全部转换
     for path in source.parent.iterdir():
@@ -117,7 +117,7 @@ def convert(source: str | Path,
             else:  # something/name.suffix
                 temp_destination = destination.with_stem(source.stem)  # something/source_name.suffix
             # 递归调用 convert 单文件的版本
-            return convert(path, temp_destination, overwrite)
+            return convert(path, temp_destination, transposition=transposition, overwrite=overwrite)
 
 
 def generate_draft(file_path: str | Path,
