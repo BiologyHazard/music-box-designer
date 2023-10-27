@@ -1,6 +1,7 @@
 import argparse
 
 from musicboxdesigner import convert, generate_draft, get_note_count_and_length, logger
+from musicboxdesigner.log import set_level
 
 
 def convert_func(args) -> None:
@@ -39,7 +40,10 @@ def count_func(args) -> None:
 
 parser = argparse.ArgumentParser(description='Music Box Designer')
 subparsers = parser.add_subparsers(title='commands', required=True)
-
+parser.add_argument('--log-level',
+                    type=lambda s: str(s).upper(),
+                    default='DEBUG',
+                    choices=['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'])
 convert_parser = subparsers.add_parser(
     'convert',
     help='Convert .emid / .fmp / .mid file to another format.',
@@ -96,8 +100,10 @@ count_parser.add_argument('-s', '--scale', type=float, default=1)
 @logger.catch()
 def main() -> None:
     args = parser.parse_args()
+    set_level(args.log_level)
     return args.func(args)
 
 
 if __name__ == '__main__':
     main()
+    logger.success('Done!')

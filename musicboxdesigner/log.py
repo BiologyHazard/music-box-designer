@@ -18,8 +18,19 @@ default_format: str = (
 )
 
 logger.remove()
-logger_id = logger.add(
+logger_id: int = logger.add(
     sys.stderr,
     level="DEBUG",
     format=default_format,
 )
+
+
+def set_level(level: str | int) -> int:
+    global logger_id
+    logger.remove(logger_id)
+    logger_id = logger.add(
+        sys.stderr,
+        level=level,
+        format=default_format,
+    )
+    return logger_id
