@@ -124,9 +124,7 @@ class EmidFile:
             midi_tick: int = 0
             for message in midi_track:
                 midi_tick += message.time
-                if message.type == 'note_on':
-                    if message.velocity == 0:
-                        continue
+                if message.type == 'note_on' and message.velocity > 0:
                     if message.note + transposition not in EMID_PITCHES:
                         logger.warning(f'note {message.note + transposition} out of range!')
                         continue
