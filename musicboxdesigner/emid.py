@@ -157,7 +157,7 @@ class EmidFile:
             # midi_track.append(MetaMessage(type='track_name', name=f'Track {track.name}', time=0))
             midi_track.name = f'Track {track.name}'
             midi_track.append(Message(type='program_change', program=10, time=0))
-            for note in track.notes:
+            for note in sorted(track.notes, key=lambda note: note.tick):
                 if EMID_PITCHES[note.emid_pitch] + transposition not in range(128):
                     continue
 
