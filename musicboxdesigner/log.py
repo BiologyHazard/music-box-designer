@@ -14,7 +14,8 @@ default_format: str = (
     "[<level>{level}</level>] "
     "<cyan><underline>{name}</underline></cyan>:"
     "<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-    "<level>{message}</level>"
+    "<level><normal>{message}</normal></level>"
+    # "<level>{message}</level>"
 )
 
 logger.remove()
