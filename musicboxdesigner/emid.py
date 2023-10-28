@@ -86,10 +86,10 @@ class EmidFile:
     def get_length(self) -> int:
         return math.ceil(max(note.tick for track in self.tracks for note in track.notes) / EMID_TICKS_PER_BEAT * 2) + 1
 
-    def update_length(self) -> int:
-        """更新长度并返回更新后的长度"""
+    def update_length(self) -> Self:
+        """更新长度并返回自身"""
         self.length = self.get_length()
-        return self.length
+        return self
 
     def to_str(self) -> str:
         note_str: str = '#'.join(
