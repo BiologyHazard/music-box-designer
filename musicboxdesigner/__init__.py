@@ -20,16 +20,16 @@ from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
 
+# from functools import wraps
 # from typing import TypeVar
-
 # _T = TypeVar('_T')
 # def _check_overwrite(
-#         function: Callable[[str | Path, str | Path], _T]
-#     ) -> Callable[[str | Path, str | Path, bool], _T]:
-#     def wrapper(source_file_path: str | Path, destination_file_path: str | Path, overwrite: bool = False) -> _T:
-#         if not overwrite:
-#             destination_file_path = find_available_filename(destination_file_path)
-#         return function(source_file_path, destination_file_path)
+#         function: Callable[[str | Path, str | Path, int], _T]
+# ) -> Callable[[str | Path, str | Path, int, bool], _T]:
+#     @wraps(function)
+#     def wrapper(source_file_path: str | Path, destination_file_path: str | Path, transposition: int = 0, overwrite: bool = False) -> _T:
+#         destination_file_path = find_available_filename(destination_file_path, overwrite)
+#         return function(source_file_path, destination_file_path, transposition)
 #     return wrapper
 
 
@@ -40,37 +40,50 @@ def emid_to_midi(source_file_path: str | Path,
                  destination_file_path: str | Path,
                  transposition: int = 0,
                  overwrite: bool = False) -> None:
-    if not overwrite:
-        destination_file_path = find_available_filename(destination_file_path)
-    EmidFile.load_from_file(source_file_path).export_midi(transposition=transposition).save(destination_file_path)
+    EmidFile.load_from_file(
+        source_file_path
+    ).export_midi(
+        transposition=transposition
+    ).save(
+        find_available_filename(destination_file_path, overwrite)
+    )
 
 
 def midi_to_emid(source_file_path: str | Path,
                  destination_file_path: str | Path,
                  transposition: int = 0,
                  overwrite: bool = False) -> None:
-    if not overwrite:
-        destination_file_path = find_available_filename(destination_file_path)
-    EmidFile.from_midi(MidiFile(source_file_path), transposition=transposition).save_to_file(destination_file_path)
+    EmidFile.from_midi(
+        MidiFile(source_file_path),
+        transposition=transposition,
+    ).save_to_file(
+        find_available_filename(destination_file_path, overwrite)
+    )
 
 
 def fmp_to_midi(source_file_path: str | Path,
                 destination_file_path: str | Path,
                 transposition: int = 0,
                 overwrite: bool = False) -> None:
-    if not overwrite:
-        destination_file_path = find_available_filename(destination_file_path)
-    FmpFile.load_from_file(source_file_path).export_midi(transposition=transposition).save(destination_file_path)
+    FmpFile.load_from_file(
+        source_file_path
+    ).export_midi(
+        transposition=transposition
+    ).save(
+        find_available_filename(destination_file_path, overwrite)
+    )
 
 
 def midi_to_fmp(source_file_path: str | Path,
                 destination_file_path: str | Path,
                 transposition: int = 0,
                 overwrite: bool = False) -> None:
-    if not overwrite:
-        destination_file_path = find_available_filename(destination_file_path)
     FmpFile.new('Instrument').import_midi(
-        MidiFile(source_file_path), transposition=transposition).save_to_file(destination_file_path)
+        MidiFile(source_file_path),
+        transposition=transposition,
+    ).save_to_file(
+        find_available_filename(destination_file_path, overwrite)
+    )
 
 
 _FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, int, bool], None]] = {

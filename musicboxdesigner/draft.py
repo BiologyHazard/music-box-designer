@@ -176,11 +176,8 @@ class ImageList(list[Image.Image]):
         if file_name is None:
             file_name = self.file_name
         for i, image in enumerate(self):
-            if overwrite:
-                path_to_save: Path = Path(file_name.format(i + 1))
-            else:
-                path_to_save = find_available_filename(file_name.format(i + 1))
-            logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()!r}...')
+            path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite)
+            logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()}...')
             image.save(path_to_save)
 
 
