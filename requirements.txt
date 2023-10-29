@@ -4,3 +4,7 @@ pydantic~=2.4.2
 pydantic-extra-types~=2.1.0
 PyYAML~=6.0.1
 loguru~=0.7.2
+
+opencv-python~=4.8.1.78
+numpy~=1.26.1
+PyMuPDF~=1.23.5
