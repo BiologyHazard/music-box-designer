@@ -81,7 +81,7 @@ class FmpEndMark(FmpTimeMark):
 class FmpChannel:
     index: int = 0
     volume: int = 1000
-    pan: int = 1000
+    pan: int = 500
     solo: bool = False
     muted: bool = False
     soundfont_name: str = ''
