@@ -1,7 +1,7 @@
 import argparse
 
-from musicboxdesigner import convert, generate_draft, get_note_count_and_length, logger
-from musicboxdesigner.log import set_level
+from music_box_designer import convert, generate_draft, get_note_count_and_length, logger
+from music_box_designer.log import set_level
 
 
 def convert_func(args) -> None:
