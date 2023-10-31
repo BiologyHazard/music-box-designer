@@ -766,6 +766,8 @@ def make_valid_filename(s: str) -> str:
 
 def find_available_filename(path: str | Path, overwrite: bool = False) -> Path:
     path = Path(path)
+    name: str = make_valid_filename(path.name)
+    path = path.with_name(name)
     if overwrite or not path.exists():
         return path
     i = 1
