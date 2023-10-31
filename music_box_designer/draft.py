@@ -164,6 +164,8 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
 
 class ImageList(list[Image.Image]):
     file_name: str
+    title: str
+    paper_size: tuple[float, float]
 
     def save(self, file_name: str | None = None, format: str | None = None, overwrite: bool = False) -> None:
         """
@@ -189,12 +191,13 @@ class ImageList(list[Image.Image]):
 
         参数：
         - `file_name`: 文件保存路径的格式化字符串，例如 `'output/pic_{}.png'`。若不指定，则取 `'<self.file_name>_{}.png'`
+        - `format`: 保存文件的格式，可以是一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
         if file_name is None:
             file_name = f'{self.file_name}_{{}}.png'
         for i, image in enumerate(self):
-            path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite)
+            path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite=overwrite)
             logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()}...')
             image.save(path_to_save, format=format)
 
@@ -206,20 +209,27 @@ class ImageList(list[Image.Image]):
         - `file_name`: 文件保存路径的格式化字符串，例如 `'output/music_box.pdf'`。若不指定，则取 `'<self.file_name>.pdf'`
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
-        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
         from reportlab.pdfgen import canvas
 
         if file_name is None:
             file_name = f'{self.file_name}.pdf'
-        c = canvas.Canvas(file_name, pagesize=A4)
+
+        logger.info('Combining images to PDF...')
+        path_to_save: Path = find_available_filename(file_name, overwrite=overwrite)
+        width, height = self.paper_size
+        pdf_page_size: tuple[float, float] = (width * mm, height * mm)
+        c = canvas.Canvas(path_to_save.as_posix(), pagesize=pdf_page_size)
         c.setAuthor('BioHazard')
-        c.setTitle('Music Box')
+        c.setTitle(getattr(self, 'title', 'Music Box'))
         c.setSubject('Music Box')
-        c.setKeywords('Music Box')
+        c.setKeywords(('Music Box', 'Music Box Designer'))
         c.setCreator('Music Box Designer')
+        # c.setProducer('Music Box Designer')
         for image in self:
-            c.drawInlineImage(image, 0, 0, *A4)
+            c.drawInlineImage(image, 0, 0, *pdf_page_size)
             c.showPage()
+        logger.info(f'Saving PDF to {path_to_save.as_posix()}...')
         c.save()
 
 
@@ -736,6 +746,7 @@ class Draft:
                         settings.vertical_line_color.as_hex(), 1,
                     )
 
+        # 小节号
         if settings.show_bar_num:
             logger.debug('Drawing bar nums...')
             bar_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
@@ -795,6 +806,8 @@ class Draft:
 
         logger.info('Compositing images...')
         image_list = ImageList(Image.alpha_composite(background_image, image) for image in images)
+        image_list.title = title
+        image_list.paper_size = (page_width, page_height)
         if self.file_path is None:
             image_list.file_name = title
         else:
