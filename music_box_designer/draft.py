@@ -165,20 +165,62 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
 class ImageList(list[Image.Image]):
     file_name: str
 
-    def save(self, file_name: str | None = None, overwrite: bool = False) -> None:
+    def save(self, file_name: str | None = None, format: str | None = None, overwrite: bool = False) -> None:
         """
-        保存图片到文件。
+        保存图片或 PDF 文档到文件，文件格式由参数 `file_name` 推断，也可以用参数 `format` 指定。
 
         参数：
-        - `file_name`：文件保存路径的格式化字符串，例如`'output/pic_{}.png'`。若不指定，则取`self.file_name`
-        - `overwrite`：是否允许覆盖同名文件，默认为`False`
+        - `file_name`:
+            对于图片格式，是文件保存路径的格式化字符串，例如 `'output/pic_{}.png'`。若不指定，则取 `'<self.file_name>_{}.png'`
+            对于 PDF 格式，是文件保存路径，例如 `'output/music_box.pdf'`。若不指定，则取 `'<self.file_name>.pdf'`
+        - `format`: 保存文件的格式，可以是 `'PDF'`，或一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
+        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
+        """
+        if format is None and file_name is not None:
+            format = Path(file_name).suffix.lstrip('.').upper()
+        if format is not None and format.upper() == 'PDF':
+            return self.save_pdf(file_name, overwrite)
+        else:
+            return self.save_image(file_name, format, overwrite)
+
+    def save_image(self, file_name: str | None = None, format: str | None = None, overwrite: bool = False) -> None:
+        """
+        保存图片到文件，文件格式由参数 `file_name` 推断。
+
+        参数：
+        - `file_name`: 文件保存路径的格式化字符串，例如 `'output/pic_{}.png'`。若不指定，则取 `'<self.file_name>_{}.png'`
+        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
         if file_name is None:
-            file_name = self.file_name
+            file_name = f'{self.file_name}_{{}}.png'
         for i, image in enumerate(self):
             path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite)
             logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()}...')
-            image.save(path_to_save)
+            image.save(path_to_save, format=format)
+
+    def save_pdf(self, file_name: str | None = None, overwrite: bool = True) -> None:
+        """
+        由图片生成 PDF 文档，并保存到文件。
+
+        参数：
+        - `file_name`: 文件保存路径的格式化字符串，例如 `'output/music_box.pdf'`。若不指定，则取 `'<self.file_name>.pdf'`
+        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
+        """
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+
+        if file_name is None:
+            file_name = f'{self.file_name}.pdf'
+        c = canvas.Canvas(file_name, pagesize=A4)
+        c.setAuthor('BioHazard')
+        c.setTitle('Music Box')
+        c.setSubject('Music Box')
+        c.setKeywords('Music Box')
+        c.setCreator('Music Box Designer')
+        for image in self:
+            c.drawInlineImage(image, 0, 0, *A4)
+            c.showPage()
+        c.save()
 
 
 @dataclass
@@ -754,9 +796,9 @@ class Draft:
         logger.info('Compositing images...')
         image_list = ImageList(Image.alpha_composite(background_image, image) for image in images)
         if self.file_path is None:
-            image_list.file_name = make_valid_filename(f'{title}_{{}}.png')
+            image_list.file_name = title
         else:
-            image_list.file_name = (self.file_path.parent / f'{self.file_path.stem}_{{}}.png').as_posix()
+            image_list.file_name = self.file_path.with_suffix('').as_posix()
         return image_list
 
 
