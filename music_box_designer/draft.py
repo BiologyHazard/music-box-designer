@@ -572,11 +572,12 @@ class Draft:
         for i, draw in enumerate(draws):
             num: int = cols_per_page if i != pages - 1 else last_page_cols
             for j in range(num + 1):
-                draw.line((pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
-                                            up_margin),
+                x: float = first_col_x + j * COL_WIDTH
+                if x < 1/4 or x > page_width - 1/4:
+                    continue
+                draw.line((pos_mm_to_pixel((x, up_margin),
                                            settings.ppi, 'floor'),
-                           pos_mm_to_pixel((first_col_x + j * COL_WIDTH,
-                                            page_height - down_margin),
+                           pos_mm_to_pixel((x, page_height - down_margin),
                                            settings.ppi, 'floor')),
                           settings.separating_line_color.as_hex(), 1)
 
