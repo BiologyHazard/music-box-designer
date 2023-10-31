@@ -23,7 +23,7 @@ background: white
 # 字体文件路径
 font_path: fonts/SourceHanSans.otf
 # 页面顶部文字
-heading: 作者 Bio-Hazard（B站同名）   禁止商用    打谱软件：https://github.com/BiologyHazard/MusicBoxDesigner
+heading: 打谱软件：https://github.com/BiologyHazard/MusicBoxDesigner
 # 页面顶部文字大小，单位毫米，将以 round(heading_size * ppi / MM_PER_INCH) 转变为像素大小
 heading_size: 3.5
 # 页面顶部文字颜色
@@ -86,6 +86,13 @@ show_column_info: true
 column_info_size: 6.0
 # 栏信息颜色
 column_info_color: '#00000080'
+
+# 是否显示栏下方页码
+show_column_num: true
+# 栏下方页码文字大小，单位毫米，将以 round(column_num_size * ppi / MM_PER_INCH) 转变为像素大小
+column_num_size: 3.0
+# 栏下方页码颜色
+column_num_color: black
 
 # 是否显示小节号
 show_bar_num: true

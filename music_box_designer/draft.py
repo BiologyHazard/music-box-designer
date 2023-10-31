@@ -45,7 +45,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''背景颜色或图片，可传入`PIL.Image.Image`对象'''
     font_path: FilePath = Path('fonts/SourceHanSans.otf')
     '''字体文件路径'''
-    heading: str = ''
+    heading: str = '打谱软件：https://github.com/BiologyHazard/MusicBoxDesigner'
     '''页面顶部文字'''
     heading_size: NonNegativeFloat = 3.5
     '''页面顶部文字大小，单位毫米，将以`round(heading_size * ppi / MM_PER_INCH)`转变为像素大小'''
@@ -103,6 +103,12 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''栏信息文字大小，单位毫米，将以`round(column_info_size * ppi / MM_PER_INCH)`转变为像素大小'''
     column_info_color: Color = Color('#00000080')
     '''栏信息颜色'''
+    show_column_num: bool = True
+    '''是否显示栏下方页码'''
+    column_num_size: NonNegativeFloat = 3.0
+    '''栏下方页码文字大小，单位毫米，将以`round(column_num_size * ppi / MM_PER_INCH)`转变为像素大小'''
+    column_num_color: Color = Color('black')
+    '''栏下方页码颜色'''
     show_bar_num: bool = True
     '''是否显示小节号'''
     beats_per_bar: PositiveInt | None = None
@@ -574,7 +580,7 @@ class Draft:
                                            settings.ppi, 'floor')),
                           settings.separating_line_color.as_hex(), 1)
 
-        # 页眉
+        # 页面顶部文字
         if settings.heading:
             logger.debug('Drawing heading...')
             heading_font: ImageFont.FreeTypeFont = ImageFont.truetype(
@@ -652,26 +658,27 @@ class Draft:
                         ), char, settings.column_info_color.as_hex(), column_info_font, 'mm')
 
         # 栏下方页码
-        logger.debug('Drawing page nums...')
-        page_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
-            str(settings.font_path), round(mm_to_pixel(3.0, settings.ppi)))
-        for page, draw in enumerate(draws):
-            for col_in_page in range(cols_per_page):
-                col = page * cols_per_page + col_in_page
-                if col >= cols:
-                    continue
-                if col == 0:
-                    current_col_top_y: float = body_y
-                    current_col_rows: int = first_col_rows
-                else:
-                    current_col_top_y = first_row_y
-                    current_col_rows = rows_per_col
-                current_col_bottom_y: float = current_col_top_y + current_col_rows * LENGTH_MM_PER_BEAT
-                draw.text(pos_mm_to_pixel(
-                    (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                     current_col_bottom_y),
-                    settings.ppi,
-                ), f'{col + 1}', 'black', page_num_font, 'la')
+        if settings.show_column_num:
+            logger.debug('Drawing column nums...')
+            page_num_font: ImageFont.FreeTypeFont = ImageFont.truetype(
+                str(settings.font_path), round(mm_to_pixel(settings.column_num_size, settings.ppi)))
+            for page, draw in enumerate(draws):
+                for col_in_page in range(cols_per_page):
+                    col = page * cols_per_page + col_in_page
+                    if col >= cols:
+                        continue
+                    if col == 0:
+                        current_col_top_y: float = body_y
+                        current_col_rows: int = first_col_rows
+                    else:
+                        current_col_top_y = first_row_y
+                        current_col_rows = rows_per_col
+                    current_col_bottom_y: float = current_col_top_y + current_col_rows * LENGTH_MM_PER_BEAT
+                    draw.text(pos_mm_to_pixel(
+                        (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
+                         current_col_bottom_y),
+                        settings.ppi,
+                    ), f'{col + 1}', settings.column_num_color.as_hex(), page_num_font, 'la')
 
         logger.debug('Drawing lines...')
         for page, draw in enumerate(draws):
