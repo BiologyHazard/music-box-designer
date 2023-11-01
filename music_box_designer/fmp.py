@@ -502,8 +502,10 @@ class FmpFile:
             track.set_velocity(velocity)
 
     def save_to_file(self, file: str | Path | BinaryIO) -> None:
+        # TODO: open file with 'wb' mode before writing is a very DANGEROUS behavior.
+        # It may cause data loss if the file already exists.
         if isinstance(file, (str, Path)):
-            Path(file).parent.mkdir(parents=True, exist_ok=True)
+            # Path(file).parent.mkdir(parents=True, exist_ok=True)
             with open(file, 'wb') as fp:
                 self._save_to_file(fp)
         else:

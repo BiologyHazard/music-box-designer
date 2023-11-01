@@ -106,7 +106,7 @@ class EmidFile:
         s: str = self.to_str()
         if isinstance(file, (str, Path)):
             file_path = Path(file)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+            # file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(s, 'utf-8')
         else:
             file.write(s)
