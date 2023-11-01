@@ -95,7 +95,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''谱面到页面上边的距离，单位毫米，设置为`None`则自动'''
     note_color: Color = Color('black')
     '''音符颜色'''
-    note_radius: NonNegativeFloat = 1.14
+    note_radius: NonNegativeFloat = 1.04
     '''音符半径，单位毫米'''
     show_column_info: bool = True
     '''是否在每栏右上角显示`music_info`以及栏号'''
