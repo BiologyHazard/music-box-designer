@@ -135,6 +135,7 @@ def convert(source: str | Path,
 
 def generate_draft(file_path: str | Path,
                    settings_path: str | Path | None = None,
+                   pdf: bool = False,
                    transposition: int = 0,
                    remove_blank: bool = True,
                    skip_near_notes: bool = True,
@@ -168,7 +169,7 @@ def generate_draft(file_path: str | Path,
         music_info=music_info,
         show_bpm=show_bpm,
         scale=scale,
-    ).save(overwrite=overwrite)
+    ).save(format='PDF' if pdf else 'PNG', overwrite=overwrite)
 
 
 def get_note_count_and_length(file_path: str | Path,

@@ -12,6 +12,7 @@ def draft_func(args) -> None:
     return generate_draft(
         file_path=args.file_path,
         settings_path=args.settings_path,
+        pdf=args.pdf,
         transposition=args.transposition,
         remove_blank=not args.keep_blank,
         skip_near_notes=not args.keep_near_notes,
@@ -75,6 +76,7 @@ draft_parser = subparsers.add_parser('draft', help='Generate draft pics.')
 draft_parser.set_defaults(func=draft_func)
 draft_parser.add_argument('file_path', type=str)
 draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml')
+draft_parser.add_argument('-p', '--pdf', action='store_true')
 draft_parser.add_argument('-t', '--transposition', type=int, default=0)
 draft_parser.add_argument('-k', '--keep-blank', action='store_true')
 draft_parser.add_argument('-n', '--keep-near-notes', action='store_true')
