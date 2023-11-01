@@ -122,7 +122,7 @@ instrument_presets: dict[str, dict[str, str]] = {
         'quarter_note_unit_lenght': '8',
         'default_timbre': 'WangMusicBox,0',
         'note_trigger_mode': 'Pizzicato',
-        'transpose': '-7',
+        'transpose': '-4',
         'range': '72,74,76,77,79,81,83,84,86,88,89,91,93,95,96',
     },
 }
