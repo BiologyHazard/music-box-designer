@@ -19,6 +19,7 @@ from .draft import Draft, DraftSettings, find_available_filename
 from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
+from .mcode import MCodeFile
 
 # from functools import wraps
 # from typing import TypeVar
@@ -27,13 +28,16 @@ from .log import logger
 #         function: Callable[[str | Path, str | Path, int], _T]
 # ) -> Callable[[str | Path, str | Path, int, bool], _T]:
 #     @wraps(function)
-#     def wrapper(source_file_path: str | Path, destination_file_path: str | Path, transposition: int = 0, overwrite: bool = False) -> _T:
+#     def wrapper(source_file_path: str | Path,
+#                 destination_file_path: str | Path,
+#                 transposition: int = 0,
+#                 overwrite: bool = False) -> _T:
 #         destination_file_path = find_available_filename(destination_file_path, overwrite)
 #         return function(source_file_path, destination_file_path, transposition)
 #     return wrapper
 
 
-_SUPPORTED_SUFFIXES: list[str] = ['.emid', '.fmp', '.mid']
+_SUPPORTED_SUFFIXES: list[str] = ['.emid', '.fmp', '.mid', '.mcode']
 
 
 def emid_to_midi(source_file_path: str | Path,
@@ -86,11 +90,38 @@ def midi_to_fmp(source_file_path: str | Path,
     )
 
 
+def mcode_to_midi(source_file_path: str | Path,
+                  destination_file_path: str | Path,
+                  transposition: int = 0,
+                  overwrite: bool = False) -> None:
+    MCodeFile.open(
+        source_file_path
+    ).export_midi(
+        transposition=transposition
+    ).save(
+        find_available_filename(destination_file_path, overwrite=overwrite)
+    )
+
+
+def midi_to_mcode(source_file_path: str | Path,
+                  destination_file_path: str | Path,
+                  transposition: int = 0,
+                  overwrite: bool = False) -> None:
+    MCodeFile.from_midi(
+        MidiFile(source_file_path),
+        transposition=transposition,
+    ).save(
+        find_available_filename(destination_file_path, overwrite=overwrite)
+    )
+
+
 _FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, int, bool], None]] = {
     ('.emid', '.mid'): emid_to_midi,
     ('.mid', '.emid'): midi_to_emid,
     ('.fmp', '.mid'): fmp_to_midi,
     ('.mid', '.fmp'): midi_to_fmp,
+    ('.mcode', '.mid'): mcode_to_midi,
+    ('.mid', '.mcode'): midi_to_mcode,
 }
 
 
