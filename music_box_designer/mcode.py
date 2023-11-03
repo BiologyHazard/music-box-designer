@@ -306,7 +306,7 @@ class MCodeFile:
 
     @classmethod
     def from_lines(cls, lines: list[str]) -> Self:
-        mcode_file: Self = cls()
+        mcode_file: Self = cls(comments=[])
         for line in lines:
             if not line:
                 continue
@@ -379,6 +379,7 @@ class MCodeFile:
                 bytes_data: bytes = base64.b64decode(base64_str)
                 midi_file = MidiFile(file=BytesIO(bytes_data))
                 return midi_file
+
         for pitch_index, tick in messages_to_notes(self.messages):
             pitch = music_box_30_notes.range[pitch_index - 1] + transposition
             if pitch not in range(128):
@@ -397,13 +398,8 @@ class MCodeFile:
         return midi_file
 
     def generate_pic(self, ppi: float = 300) -> Image.Image:
-        notes: list[MCodeNote] = []
-        tick: int = 0
-        for message in self.messages:
-            tick += message.Y
-            if message.M in (90, 80):
-                continue
-            notes.append(MCodeNote(message.M, tick))
+        notes: list[MCodeNote] = list(messages_to_notes(self.messages, ignore_M90_M80_Y=False))
+        tick = notes[-1].tick if notes else 0
         length: float = tick / self.ppq * music_box_30_notes.length_mm_per_beat
         image_size: tuple[int, int] = pos_mm_to_pixel((music_box_30_notes.col_width, length), ppi, 'round')
         image: Image.Image = Image.new('RGBA', image_size, 'white')
