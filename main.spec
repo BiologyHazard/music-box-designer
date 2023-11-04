@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import shutil
+import time
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -63,5 +64,5 @@ dest_path.mkdir(parents=True, exist_ok=True)
 shutil.copy('README.md', dest_path)
 shutil.copy('draft_settings.yml', dest_path)
 shutil.copy('fonts/SourceHanSans.otf', dest_path / 'fonts')
-
-zip_directory(Path(DISTPATH) / 'main', Path(DISTPATH) / 'Music Box Designer.zip')
+zip_directory(Path(DISTPATH) / 'main',
+              Path(DISTPATH) / f'Music Box Designer_{time.strftime('%Y-%m-%d', time.localtime())}.zip')
