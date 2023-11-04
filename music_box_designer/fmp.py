@@ -723,7 +723,7 @@ class FmpFile:
                 file_path = Path(midi_file.filename)
                 self.title = file_path.stem
                 self.file_path = file_path
-            except Exception:
+            except TypeError:
                 self.title = str(midi_file.filename)
 
         new_tracks: list[FmpTrack] = []

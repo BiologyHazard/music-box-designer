@@ -13,6 +13,7 @@ def draft_func(args) -> None:
         file_path=args.file_path,
         settings_path=args.settings_path,
         pdf=args.pdf,
+        note_count=args.note_count,
         transposition=args.transposition,
         remove_blank=not args.keep_blank,
         skip_near_notes=not args.keep_near_notes,
@@ -77,14 +78,15 @@ draft_parser.set_defaults(func=draft_func)
 draft_parser.add_argument('file_path', type=str)
 draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml')
 draft_parser.add_argument('-p', '--pdf', action='store_true')
+draft_parser.add_argument('-N', '--note-count', type=int, default=30)
 draft_parser.add_argument('-t', '--transposition', type=int, default=0)
 draft_parser.add_argument('-k', '--keep-blank', action='store_true')
 draft_parser.add_argument('-n', '--keep-near-notes', action='store_true')
 draft_parser.add_argument('-b', '--bpm', type=float, default=None)
-draft_parser.add_argument('--title', type=str)
-draft_parser.add_argument('--subtitle', type=str)
-draft_parser.add_argument('--music-info', type=str)
-draft_parser.add_argument('--show-bpm', type=float)
+draft_parser.add_argument('-T', '--title', type=str)
+draft_parser.add_argument('-S', '--subtitle', type=str)
+draft_parser.add_argument('-I', '--music-info', type=str)
+draft_parser.add_argument('-B', '--show-bpm', type=float)
 draft_parser.add_argument('-s', '--scale', type=float, default=1)
 draft_parser.add_argument('-o', '--overwrite', action='store_true')
 
@@ -98,7 +100,7 @@ count_parser.add_argument('-b', '--bpm', type=float, default=None)
 count_parser.add_argument('-s', '--scale', type=float, default=1)
 
 
-@logger.catch()
+@logger.catch
 def main() -> None:
     args = parser.parse_args()
     set_level(args.log_level)

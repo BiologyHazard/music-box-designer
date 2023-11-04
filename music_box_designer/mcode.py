@@ -40,116 +40,6 @@ class MCodeNote(NamedTuple):
 def calculate_distance(delta_index: int, delta_tick: int, ppq: int = DEFAULT_PPQ) -> float:
     return math.hypot(delta_index * music_box_30_notes.grid_width,
                       delta_tick / ppq * music_box_30_notes.length_mm_per_beat)
-    # return math.hypot(delta_index, delta_tick)
-
-
-# def calculate_distance(message1: MCodeMessage, message2: MCodeMessage, /, ppq: int = DEFAULT_PPQ) -> float:
-#     return calculate_distance_by_delta(message1.M - message2.M, message1.Y - message2.Y, ppq)
-
-
-# def optimize_message_order(messages: list[MCodeMessage], ppq: int = DEFAULT_PPQ) -> list[MCodeMessage]:
-#     """This is an in-place function. Param `messages` will be modified."""
-#
-#     class NoteLine(NamedTuple):
-#         Y: int
-#         M_min: int
-#         M_max: int
-#         index_min: int
-#         index_max: int
-#
-#     print(messages)
-#
-#     note_lines: list[NoteLine] = []
-#     accumulate_Y: int = 0
-#     i: int = 0
-#     while i < len(messages):
-#         accumulate_Y += messages[i].Y
-#         if messages[i].M in (90, 80):
-#             i += 1
-#             continue
-#         M_min = M_max = messages[i].M
-#         index_min = i
-#         while (i < len(messages) - 1
-#                # and messages[i].M not in (90, 80)
-#                and messages[i + 1].Y == 0):
-#             M_min = min(M_min, messages[i].M)
-#             M_max = max(M_max, messages[i].M)
-#             i += 1
-#         index_max = i
-#         note_lines.append(NoteLine(accumulate_Y, M_min, M_max, index_min, index_max))
-#         i += 1
-#
-#     dp_positive: float = 0
-#     dp_negative: float = 0
-#     for note_line in note_lines:
-#         dp_positive = min(
-#             dp_positive + calculate_distance(messages[note_line.index_min - 1], messages[note_line.index_max], ppq),
-#             dp_negative,
-#         )
-#
-#     print(note_lines)
-#     raise NotImplementedError
-#     return messages
-
-# def get_optimized_notes(notes: list[MCodeNote],
-#                         ppq: int = DEFAULT_PPQ) -> list[MCodeNote]:
-#     """Do we have an algorithm which uses O(1) extra space?"""
-#
-#     @dataclass
-#     class DPState:
-#         distance: float = 0
-#         # last_index: int = 0
-#         # last_tick: int = 0
-#         notes: list[MCodeNote] = field(default_factory=list)
-#
-#     dp_positive = DPState()
-#     dp_negative = DPState()
-#
-#     i: int = 0
-#     while i < len(notes):
-#         start: int = i
-#         tick: int = notes[i].tick
-#         min_index = max_index = notes[i].pitch_index
-#         while (i < len(notes)
-#                and notes[i].tick == notes[start].tick):
-#             min_index: int = min(min_index, notes[i].pitch_index)
-#             max_index: int = max(max_index, notes[i].pitch_index)
-#             i += 1
-#         if not dp_positive.notes:
-#             dp_positive.distance = 0
-#             distance_positive = distance_negative = 0
-#         else:
-#             distance_positive: float = calculate_distance(
-#                 dp_positive.notes[-1].pitch_index - min_index, dp_positive.notes[-1].tick - tick, ppq)
-#             distance_negative: float = calculate_distance(
-#                 dp_negative.notes[-1].pitch_index - min_index, dp_negative.notes[-1].tick - tick, ppq)
-#             dp_positive.distance = max(distance_positive, distance_negative)
-#         dp_positive.distance += calculate_distance(0, max_index - min_index, ppq)
-#         if distance_positive < distance_negative:
-#             dp_positive.notes.extend(notes[start:i])
-#         else:
-#             dp_positive.notes = dp_negative.notes + notes[start:i]
-#
-#         if not dp_negative.notes:
-#             dp_negative.distance = 0
-#             distance_positive = distance_negative = 0
-#         else:
-#             distance_positive = dp_positive.distance + calculate_distance(
-#                 dp_positive.notes[-1].pitch_index - max_index, dp_positive.notes[-1].tick - tick, ppq)
-#             distance_negative = dp_negative.distance + calculate_distance(
-#                 dp_negative.notes[-1].pitch_index - max_index, dp_negative.notes[-1].tick - tick, ppq)
-#             dp_negative.distance = max(distance_positive, distance_negative)
-#         dp_negative.distance += calculate_distance(0, max_index - min_index, ppq)
-#         if distance_positive < distance_negative:
-#             dp_negative.notes = dp_positive.notes + list(reversed(notes[start:i]))
-#         else:
-#             dp_negative.notes.extend(reversed(notes[start:i]))
-#         # dp_negative.notes.extend(reversed(notes[start:i]))
-#
-#     notes_arranged: list[MCodeNote] = (dp_positive.notes
-#                                        if dp_positive.distance < dp_negative.distance
-#                                        else dp_negative.notes)
-#     return notes_arranged
 
 
 class _NoteLine(NamedTuple):
@@ -226,11 +116,6 @@ def get_arranged_notes(notes: list[MCodeNote], ppq: int = DEFAULT_PPQ) -> list[M
         distance_positive += current_line_distance
         distance_negative += current_line_distance
 
-        # print(distance_positive_positive, distance_negative_positive,
-        #       distance_positive_negative, distance_negative_negative, sep='\t')
-        # print(distance_positive, distance_negative, sep='\t')
-        # print(routine_positive, routine_negative, sep='\t')
-
     if distance_positive < distance_negative:
         # distance = distance_positive
         final_routine: bool = True
@@ -249,7 +134,6 @@ def get_arranged_notes(notes: list[MCodeNote], ppq: int = DEFAULT_PPQ) -> list[M
         else:
             current_routine = routine_negative[i]
     routine = list(reversed(routine_reversed))
-    # print(routine)
 
     notes_arranged: list[MCodeNote] = []
     for note_line, direction in zip(note_lines, routine):

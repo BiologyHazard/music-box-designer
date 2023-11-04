@@ -14,11 +14,10 @@ from mido import MidiFile
 from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, PositiveInt, field_serializer, field_validator
 from pydantic_extra_types.color import Color
 
-from .consts import (COL_WIDTH, GRID_WIDTH, LEFT_BORDER, LENGTH_MM_PER_BEAT,
-                     MIN_TRIGGER_SPACING, MUSIC_BOX_30_NOTES_PITCH, NOTES, RIGHT_BORDER)
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
 from .fmp import FmpFile
 from .log import logger
+from .presets import MusicBox, music_box_30_notes, music_box_presets
 
 DEFAULT_BPM: float = 120
 
@@ -143,17 +142,16 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
             return value
         try:
             return Color(value)
-        except Exception:
+        except ValueError:
             return Image.open(value)
 
     @field_serializer('background')
-    @classmethod
-    def serializer(cls, value):
+    def serializer(self, value):
         if isinstance(value, Color):
             return value.original()
         try:
             return value.filename
-        except Exception:
+        except AttributeError:
             raise Exception(f'Failed to serialize background of value {value}')
 
     def model_dump_yaml(self, **kwargs) -> str:
@@ -242,6 +240,7 @@ class ImageList(list[Image.Image]):
 @dataclass
 class Draft:
     notes: list[Note] = field(default_factory=list)
+    preset: MusicBox = music_box_30_notes
     title: str = ''
     subtitle: str = ''
     music_info: str = ''
@@ -254,6 +253,7 @@ class Draft:
     @classmethod
     def load_from_file(cls,
                        file_path: str | Path,
+                       preset: MusicBox | None = None,
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
@@ -262,23 +262,26 @@ class Draft:
         logger.info(f'Loading from {file_path!r}...')
         try:
             file_path = Path(file_path)
-        except Exception:
+        except TypeError:
             raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file_path)}.")
         match file_path.suffix:
             case '.emid':
                 return cls.load_from_emid(EmidFile.load_from_file(file_path),
+                                          preset=preset,
                                           transposition=transposition,
                                           remove_blank=remove_blank,
                                           skip_near_notes=skip_near_notes,
-                                          bpm=bpm if bpm is not None else DEFAULT_BPM)
+                                          bpm=bpm)
             case '.fmp':
                 return cls.load_from_fmp(FmpFile.load_from_file(file_path),
+                                         preset=preset,
                                          transposition=transposition,
                                          remove_blank=remove_blank,
                                          skip_near_notes=skip_near_notes,
                                          bpm=bpm)
             case '.mid':
                 return cls.load_from_midi(MidiFile(file_path),
+                                          preset=preset,
                                           transposition=transposition,
                                           remove_blank=remove_blank,
                                           skip_near_notes=skip_near_notes,
@@ -289,12 +292,15 @@ class Draft:
     @classmethod
     def load_from_emid(cls,
                        emid_file: EmidFile,
+                       preset: MusicBox | None = None,
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
-                       bpm: float = DEFAULT_BPM,
+                       bpm: float | None = None,
                        ) -> Self:
         self: Self = cls()
+        if preset is not None:
+            self.preset = preset
         if emid_file.file_path is not None:
             self.title = self.music_info = emid_file.file_path.stem
             self.file_path = emid_file.file_path
@@ -302,11 +308,10 @@ class Draft:
 
         for track in emid_file.tracks:
             for note in track.notes:
-                if (pitch := EMID_PITCHES[note.emid_pitch] + transposition) in MUSIC_BOX_30_NOTES_PITCH:
-                    self.notes.append(Note(pitch, note.tick / EMID_TICKS_PER_BEAT))
-                else:
-                    logger.warning(
-                        f'Note {pitch} in bar {math.floor(note.tick / EMID_TICKS_PER_BEAT / 4) + 1} is out of range')
+                self.notes.append(Note(pitch=EMID_PITCHES[note.emid_pitch] + transposition,
+                                       time=note.tick / EMID_TICKS_PER_BEAT))
+
+        self.remove_out_of_range_notes()
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -316,12 +321,24 @@ class Draft:
     @classmethod
     def load_from_fmp(cls,
                       fmp_file: FmpFile,
+                      preset: MusicBox | None = None,
                       transposition: int = 0,
                       remove_blank: bool = True,
                       skip_near_notes: bool = True,
                       bpm: float | None = None,
                       ) -> Self:
         self: Self = cls()
+        # TODO: Use fmp_file.instrument and fmp_file.instrument_cfg
+        if preset is None:
+            preset = music_box_presets.get(
+                {
+                    'Instrument_Preset_PaperStripMusicBox_30Note': 30,
+                    'Instrument_Preset_PaperStripMusicBox_20Note': 20,
+                    'Instrument_Preset_PaperStripMusicBox_15Note': 15,
+                }.get(fmp_file.instrument, 30),
+                music_box_30_notes,
+            )
+        self.preset = preset
         self.title = self.music_info = fmp_file.title
         self.subtitle = fmp_file.subtitle
         self.file_path = fmp_file.file_path
@@ -332,12 +349,10 @@ class Draft:
             for note in track.notes:
                 if note.velocity == 0:
                     continue
-                if note.pitch + transposition in MUSIC_BOX_30_NOTES_PITCH:
-                    self.notes.append(Note(note.pitch + transposition, note.tick / fmp_file.ticks_per_beat))
-                else:
-                    logger.warning(
-                        f'Note {note.pitch + transposition} in bar {math.floor(
-                            note.tick / fmp_file.ticks_per_beat / 4) + 1} is out of range')
+                self.notes.append(Note(pitch=note.pitch + transposition,
+                                       time=note.tick / fmp_file.ticks_per_beat))
+
+        self.remove_out_of_range_notes()
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -347,17 +362,20 @@ class Draft:
     @classmethod
     def load_from_midi(cls,
                        midi_file: MidiFile,
+                       preset: MusicBox | None = None,
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
                        bpm: float | None = None) -> Self:
         self: Self = cls()
+        if preset is not None:
+            self.preset = preset
         if midi_file.filename is not None:
             try:
                 file_path = Path(midi_file.filename)
                 self.title = self.music_info = file_path.stem
                 self.file_path = file_path
-            except Exception:
+            except TypeError:
                 self.title = self.music_info = str(midi_file.filename)
 
         ticks_per_beat: int = midi_file.ticks_per_beat
@@ -386,13 +404,25 @@ class Draft:
                     real_time: float = (tempo_events[i].time_passed  # type: ignore
                                         + mido.tick2second(midi_tick - tick, ticks_per_beat, tempo))
                     time = real_time / 60 * bpm
-                self.notes.append(Note(message.note + transposition, time))
+                self.notes.append(Note(pitch=message.note + transposition,
+                                       time=time))
+
         self.notes.sort(key=lambda note: note.time)
+        self.remove_out_of_range_notes()
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
             self.remove_near_notes()
         return self
+
+    def remove_out_of_range_notes(self) -> None:
+        new_notes: list[Note] = []
+        for note in self.notes:
+            if note.pitch not in self.preset.range:
+                logger.warning(f'Note {note.pitch} in bar {math.floor(note.time / 4) + 1} is out of range.')
+                continue
+            new_notes.append(note)
+        self.notes = new_notes
 
     def remove_blank(self) -> None:
         if not self.notes:
@@ -403,13 +433,12 @@ class Draft:
 
     def remove_near_notes(self) -> None:
         self.notes.sort(key=lambda note: note.time)
-        latest_time: defaultdict[int, float] = defaultdict(lambda: -MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT)
+        latest_time: defaultdict[int, float] = defaultdict(
+            lambda: -self.preset.min_trigger_spacing / self.preset.length_mm_per_beat)
         new_notes: list[Note] = []
         for note in self.notes:
-            if note.pitch not in MUSIC_BOX_30_NOTES_PITCH:
-                logger.warning(f'Note {note.pitch} in bar {math.floor(note.time / 4) + 1} is out of range.')
-                continue
-            if note.time < latest_time[note.pitch] + MIN_TRIGGER_SPACING / LENGTH_MM_PER_BEAT:
+            if (note.time < latest_time[note.pitch]
+                    + self.preset.min_trigger_spacing / self.preset.length_mm_per_beat):
                 logger.warning(f'Too Near! Note {note.pitch} in bar {math.floor(note.time / 4) + 1}, SKIPPING!')
                 continue
             new_notes.append(note)
@@ -439,7 +468,7 @@ class Draft:
 
         self.notes.sort(key=lambda note: note.time)
         if self.notes:
-            length_mm: float = self.notes[-1].time * LENGTH_MM_PER_BEAT * scale
+            length_mm: float = self.notes[-1].time * self.preset.length_mm_per_beat * scale
         else:
             length_mm = 0
 
@@ -505,24 +534,27 @@ class Draft:
             body_y = y
 
         # 计算纸张大小
-        rows: int = math.floor(length_mm / LENGTH_MM_PER_BEAT) + 1
+        rows: int = math.floor(length_mm / self.preset.length_mm_per_beat) + 1
         if settings.paper_size is not None:
             page_width, page_height = settings.paper_size
-            rows_per_col: int = math.floor((page_height - up_margin - down_margin) / LENGTH_MM_PER_BEAT)
-            cols_per_page: int = math.floor((page_width - left_margin - right_margin) / COL_WIDTH)
-            first_col_rows: int = max(math.floor((page_height - down_margin - body_y) / LENGTH_MM_PER_BEAT), 0)
+            rows_per_col: int = math.floor((page_height - up_margin - down_margin) / self.preset.length_mm_per_beat)
+            cols_per_page: int = math.floor((page_width - left_margin - right_margin) / self.preset.col_width)
+            first_col_rows: int = max(math.floor((page_height - down_margin - body_y) / self.preset.length_mm_per_beat),
+                                      0)
             cols: int = math.ceil((rows + rows_per_col - first_col_rows) / rows_per_col)
             pages: int = math.ceil(cols / cols_per_page)
             last_page_cols: int = cols - (pages - 1) * cols_per_page
         else:
             cols = last_page_cols = cols_per_page = pages = 1
             rows_per_col = first_col_rows = rows
-            page_width: float = left_margin + COL_WIDTH + right_margin
-            page_height: float = body_y + rows * LENGTH_MM_PER_BEAT + down_margin
-        first_col_x: float = page_width / 2 - cols_per_page * COL_WIDTH / 2
-        first_row_y: float = page_height / 2 - rows_per_col * LENGTH_MM_PER_BEAT / 2
-        next_body_y: float = first_row_y + math.ceil((body_y - first_row_y) / LENGTH_MM_PER_BEAT) * LENGTH_MM_PER_BEAT
-        if next_body_y + first_col_rows * LENGTH_MM_PER_BEAT + down_margin <= page_height:
+            page_width: float = left_margin + self.preset.col_width + right_margin
+            page_height: float = body_y + rows * self.preset.length_mm_per_beat + down_margin
+        first_col_x: float = page_width / 2 - cols_per_page * self.preset.col_width / 2
+        first_row_y: float = page_height / 2 - rows_per_col * self.preset.length_mm_per_beat / 2
+        next_body_y: float = (first_row_y
+                              + math.ceil((body_y - first_row_y) / self.preset.length_mm_per_beat)
+                              * self.preset.length_mm_per_beat)
+        if next_body_y + first_col_rows * self.preset.length_mm_per_beat + down_margin <= page_height:
             body_y = next_body_y
 
         logger.debug(f'rows: {rows}')
@@ -555,11 +587,11 @@ class Draft:
                 page: int = col // cols_per_page
                 col_in_page: int = col % cols_per_page
                 current_col_y: float = body_y if col == 0 else first_row_y
-                row_in_col: float = (row if col == 0 else
-                                     (row - first_col_rows + rows_per_col) % rows_per_col)
+                row_in_col: float = (row if col == 0 else (row - first_col_rows + rows_per_col) % rows_per_col)
                 draws[page].text(
-                    pos_mm_to_pixel((first_col_x + (col_in_page + 1 / 2) * COL_WIDTH,
-                                     current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi),
+                    pos_mm_to_pixel((first_col_x + (col_in_page + 1 / 2) * self.preset.col_width,
+                                     current_col_y + row_in_col * self.preset.length_mm_per_beat),
+                                    settings.ppi),
                     settings.custom_watermark,
                     settings.custom_watermark_color.as_hex(),
                     custom_watermark_font,
@@ -572,8 +604,8 @@ class Draft:
         for i, draw in enumerate(draws):
             num: int = cols_per_page if i != pages - 1 else last_page_cols
             for j in range(num + 1):
-                x: float = first_col_x + j * COL_WIDTH
-                if x < 1/4 or x > page_width - 1/4:
+                x: float = first_col_x + j * self.preset.col_width
+                if x < 1 / 4 or x > page_width - 1 / 4:  # 避免线条过于靠近边缘
                     continue
                 draw.line((pos_mm_to_pixel((x, up_margin),
                                            settings.ppi, 'floor'),
@@ -595,13 +627,13 @@ class Draft:
             # 标题
             if settings.show_title:
                 if settings.title_align == 'left':
-                    title_x: float = first_col_x + LEFT_BORDER
+                    title_x: float = first_col_x + self.preset.left_border
                     title_anchor: str = 'la'
                 elif settings.title_align == 'center':
-                    title_x = first_col_x + COL_WIDTH / 2
+                    title_x = first_col_x + self.preset.col_width / 2
                     title_anchor = 'ma'
                 elif settings.title_align == 'right':
-                    title_x = first_col_x + COL_WIDTH - RIGHT_BORDER
+                    title_x = first_col_x + self.preset.col_width - self.preset.right_border
                     title_anchor = 'ra'
                 else:
                     raise ValueError
@@ -612,34 +644,42 @@ class Draft:
             # 副标题
             if settings.show_subtitle:
                 if settings.subtitle_align == 'left':
-                    subtitle_x: float = first_col_x + LEFT_BORDER
+                    subtitle_x: float = first_col_x + self.preset.left_border
                     subtitle_anchor: str = 'la'
                 elif settings.subtitle_align == 'center':
-                    subtitle_x = first_col_x + COL_WIDTH / 2
+                    subtitle_x = first_col_x + self.preset.col_width / 2
                     subtitle_anchor = 'ma'
                 elif settings.subtitle_align == 'right':
-                    subtitle_x = first_col_x + COL_WIDTH - RIGHT_BORDER
+                    subtitle_x = first_col_x + self.preset.col_width - self.preset.right_border
                     subtitle_anchor = 'ra'
                 else:
                     raise ValueError
 
-                draws[0].text(pos_mm_to_pixel((subtitle_x, subtitle_y), settings.ppi),  # type: ignore
-                              subtitle, 'black', subtitle_font, subtitle_anchor,  # type: ignore
-                              align=settings.subtitle_align)
+                draws[0].text(
+                    pos_mm_to_pixel((subtitle_x, subtitle_y), settings.ppi),  # type: ignore
+                    subtitle, 'black', subtitle_font, subtitle_anchor,  # type: ignore
+                    align=settings.subtitle_align,
+                )
 
             # 乐曲速度信息 & 音符数量和纸带长度信息
             if settings.show_tempo or settings.show_note_count:
                 if settings.show_tempo:
-                    draws[0].text(pos_mm_to_pixel((first_col_x + LEFT_BORDER,
-                                                   body_y - Draft.INFO_SPACING),
-                                                  settings.ppi),
-                                  tempo_text, 'black', tempo_note_count_font, 'ld')  # type: ignore
+                    draws[0].text(
+                        pos_mm_to_pixel((first_col_x + self.preset.left_border,
+                                         body_y - Draft.INFO_SPACING),
+                                        settings.ppi),
+                        tempo_text, 'black', tempo_note_count_font, 'ld',  # type: ignore
+                    )
 
                 if settings.show_note_count:
-                    draws[0].text(pos_mm_to_pixel((first_col_x + COL_WIDTH - RIGHT_BORDER,
-                                                   body_y - Draft.INFO_SPACING),
-                                                  settings.ppi),
-                                  note_count_text, 'black', tempo_note_count_font, 'rd')  # type: ignore
+                    draws[0].text(
+                        pos_mm_to_pixel(
+                            (first_col_x + self.preset.col_width - self.preset.right_border,
+                             body_y - Draft.INFO_SPACING),
+                            settings.ppi,
+                        ),
+                        note_count_text, 'black', tempo_note_count_font, 'rd',  # type: ignore
+                    )
 
         # music_info以及栏号
         if settings.show_column_info:
@@ -652,11 +692,15 @@ class Draft:
                         continue
                     current_col_y = body_y if page == 0 and col_in_page == 0 else first_row_y
                     for i, char in enumerate(f'{music_info}{page * cols_per_page + col_in_page + 1}'):
-                        draw.text(pos_mm_to_pixel(
-                            (first_col_x + (col_in_page + 1) * COL_WIDTH - RIGHT_BORDER - LENGTH_MM_PER_BEAT / 2,
-                             current_col_y + (i + 1 / 2) * LENGTH_MM_PER_BEAT),
-                            settings.ppi,
-                        ), char, settings.column_info_color.as_hex(), column_info_font, 'mm')
+                        draw.text(
+                            pos_mm_to_pixel(
+                                (first_col_x + (col_in_page + 1) * self.preset.col_width
+                                 - self.preset.right_border - self.preset.length_mm_per_beat / 2,
+                                 current_col_y + (i + 1 / 2) * self.preset.length_mm_per_beat),
+                                settings.ppi,
+                            ),
+                            char, settings.column_info_color.as_hex(), column_info_font, 'mm',
+                        )
 
         # 栏下方页码
         if settings.show_column_num:
@@ -674,12 +718,13 @@ class Draft:
                     else:
                         current_col_top_y = first_row_y
                         current_col_rows = rows_per_col
-                    current_col_bottom_y: float = current_col_top_y + current_col_rows * LENGTH_MM_PER_BEAT
-                    draw.text(pos_mm_to_pixel(
-                        (first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                         current_col_bottom_y),
-                        settings.ppi,
-                    ), f'{col + 1}', settings.column_num_color.as_hex(), page_num_font, 'la')
+                    current_col_bottom_y: float = (
+                        current_col_top_y + current_col_rows * self.preset.length_mm_per_beat)
+                    draw.text(
+                        pos_mm_to_pixel((first_col_x + col_in_page * self.preset.col_width + self.preset.left_border,
+                                         current_col_bottom_y),
+                                        settings.ppi),
+                        f'{col + 1}', settings.column_num_color.as_hex(), page_num_font, 'la')
 
         logger.debug('Drawing lines...')
         for page, draw in enumerate(draws):
@@ -695,12 +740,15 @@ class Draft:
                 # 整拍横线
                 for row in range(current_col_rows + 1):
                     draw.line(
-                        (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                                          current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, 'floor'),
-                         pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                          current_col_y + row * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, 'floor')),
+                        (pos_mm_to_pixel(
+                            (first_col_x + col_in_page * self.preset.col_width + self.preset.left_border,
+                             current_col_y + row * self.preset.length_mm_per_beat),
+                            settings.ppi, 'floor'),
+                         pos_mm_to_pixel(
+                             (first_col_x + col_in_page * self.preset.col_width
+                              + self.preset.col_width - self.preset.right_border,
+                              current_col_y + row * self.preset.length_mm_per_beat),
+                             settings.ppi, 'floor')),
                         settings.whole_beat_line_color.as_hex(), 1,
                     )
                 # 半拍横线
@@ -708,49 +756,60 @@ class Draft:
                     match settings.half_beat_line_type:
                         case 'solid':
                             draw.line(
-                                (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER,
-                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                 settings.ppi, 'floor'),
-                                 pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + COL_WIDTH - RIGHT_BORDER,
-                                                  current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                 settings.ppi, 'floor')),
+                                (pos_mm_to_pixel(
+                                    (first_col_x + col_in_page * self.preset.col_width + self.preset.left_border,
+                                     current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                    settings.ppi, 'floor'),
+                                 pos_mm_to_pixel(
+                                     (first_col_x + col_in_page * self.preset.col_width
+                                      + self.preset.col_width - self.preset.right_border,
+                                      current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                     settings.ppi, 'floor')),
                                 settings.half_beat_line_color.as_hex(), 1,
                             )
                         case 'dashed':
                             for part in range(6):
                                 draw.line(
-                                    (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, 'floor'),
-                                     pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 1 + 1 / 2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, 'floor')),
+                                    (pos_mm_to_pixel(
+                                        (first_col_x + col_in_page * self.preset.col_width
+                                         + self.preset.left_border + (part * 5) * self.preset.grid_width,
+                                         current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                        settings.ppi, 'floor'),
+                                     pos_mm_to_pixel(
+                                         (first_col_x + col_in_page * self.preset.col_width
+                                          + self.preset.left_border + (part * 5 + 1 + 1 / 2) * self.preset.grid_width,
+                                          current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                         settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                                 draw.line(
-                                    (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 2 + 1 / 2) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, 'floor'),
-                                     pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER
-                                                      + (part * 5 + 4) * GRID_WIDTH,
-                                                      current_col_y + (row + 1 / 2) * LENGTH_MM_PER_BEAT),
-                                                     settings.ppi, 'floor')),
+                                    (pos_mm_to_pixel(
+                                        (first_col_x + col_in_page * self.preset.col_width
+                                         + self.preset.left_border + (part * 5 + 2 + 1 / 2) * self.preset.grid_width,
+                                         current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                        settings.ppi, 'floor'),
+                                     pos_mm_to_pixel(
+                                         (first_col_x + col_in_page * self.preset.col_width
+                                          + self.preset.left_border + (part * 5 + 4) * self.preset.grid_width,
+                                          current_col_y + (row + 1 / 2) * self.preset.length_mm_per_beat),
+                                         settings.ppi, 'floor')),
                                     settings.half_beat_line_color.as_hex(), 1,
                                 )
                         case _:
                             raise ValueError
                 # 竖线
-                for line in range(NOTES):
+                for line in range(self.preset.note_count):
                     draw.line(
-                        (pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
-                                          current_col_y),
-                                         settings.ppi, 'floor'),
-                         pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + line * GRID_WIDTH,
-                                          current_col_y + current_col_rows * LENGTH_MM_PER_BEAT),
-                                         settings.ppi, 'floor')),
+                        (pos_mm_to_pixel(
+                            (first_col_x + col_in_page * self.preset.col_width
+                             + self.preset.left_border + line * self.preset.grid_width,
+                             current_col_y),
+                            settings.ppi, 'floor'),
+                         pos_mm_to_pixel(
+                             (first_col_x + col_in_page * self.preset.col_width
+                              + self.preset.left_border + line * self.preset.grid_width,
+                              current_col_y + current_col_rows * self.preset.length_mm_per_beat),
+                             settings.ppi, 'floor')),
                         settings.vertical_line_color.as_hex(), 1,
                     )
 
@@ -775,8 +834,12 @@ class Draft:
                 row_in_col: float = (row if col == 0 else
                                      (row - first_col_rows + rows_per_col) % rows_per_col)
                 draws[page].text(
-                    pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER - settings.note_radius,
-                                     current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi),
+                    pos_mm_to_pixel(
+                        (first_col_x + col_in_page * self.preset.col_width
+                         + self.preset.left_border - settings.note_radius,
+                         current_col_y + row_in_col * self.preset.length_mm_per_beat),
+                        settings.ppi,
+                    ),
                     str(i + settings.bar_num_start),
                     settings.bar_num_color.as_hex(),
                     bar_num_font,
@@ -787,7 +850,7 @@ class Draft:
         logger.debug('Drawing notes...')
         for note in self.notes:
             try:
-                index: int = MUSIC_BOX_30_NOTES_PITCH.index(note.pitch)
+                index: int = self.preset.range.index(note.pitch)
             except ValueError:
                 logger.warning(f'{note} out of range, SKIPPING!')
                 continue
@@ -800,8 +863,12 @@ class Draft:
                                  (note.time * scale - first_col_rows + rows_per_col) % rows_per_col)
             draw_circle(
                 images[page],
-                pos_mm_to_pixel((first_col_x + col_in_page * COL_WIDTH + LEFT_BORDER + index * GRID_WIDTH,
-                                 current_col_y + row_in_col * LENGTH_MM_PER_BEAT), settings.ppi, None),
+                pos_mm_to_pixel(
+                    (first_col_x + col_in_page * self.preset.col_width
+                     + self.preset.left_border + index * self.preset.grid_width,
+                     current_col_y + row_in_col * self.preset.length_mm_per_beat),
+                    settings.ppi, None,
+                ),
                 mm_to_pixel(settings.note_radius, settings.ppi),
                 settings.note_color.as_hex(),
                 anti_alias=settings.anti_alias,
@@ -896,15 +963,13 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: None = ...) -> tuple[float, float]:
-    ...
+                    method: None = ...) -> tuple[float, float]: ...
 
 
 @overload
 def pos_mm_to_pixel(pos: tuple[float, float],
                     ppi: float,
-                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]:
-    ...
+                    method: Literal['floor', 'round'] = ...) -> tuple[int, int]: ...
 
 
 def pos_mm_to_pixel(pos: tuple[float, float],

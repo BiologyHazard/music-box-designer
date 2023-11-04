@@ -14,12 +14,12 @@ from typing import Any
 import yaml
 from mido import MidiFile
 
-from .consts import LENGTH_MM_PER_BEAT
 from .draft import Draft, DraftSettings, find_available_filename
 from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
 from .mcode import MCodeFile
+from .presets import MusicBox, get_preset, music_box_30_notes, music_box_presets
 
 # from functools import wraps
 # from typing import TypeVar
@@ -167,6 +167,7 @@ def convert(source: str | Path,
 def generate_draft(file_path: str | Path,
                    settings_path: str | Path | None = None,
                    pdf: bool = False,
+                   note_count: int | None = None,
                    transposition: int = 0,
                    remove_blank: bool = True,
                    skip_near_notes: bool = True,
@@ -187,8 +188,12 @@ def generate_draft(file_path: str | Path,
         obj.update(kwargs)
         settings = DraftSettings.model_validate(obj)
 
+    # if note_count is not None and note_count not in music_box_presets:
+    #     raise ValueError(f'{note_count} note music box not in presets.')
+    # preset: MusicBoxPreset | None = music_box_presets[note_count] if note_count is not None else None
     Draft.load_from_file(
         file_path,
+        preset=get_preset(note_count),
         transposition=transposition,
         remove_blank=remove_blank,
         skip_near_notes=skip_near_notes,
@@ -204,18 +209,20 @@ def generate_draft(file_path: str | Path,
 
 
 def get_note_count_and_length(file_path: str | Path,
+                              note_count: int | None = None,
                               transposition: int = 0,
                               remove_blank: bool = True,
                               skip_near_notes: bool = True,
                               bpm: float | None = None,
                               scale: float = 1) -> tuple[int, float]:
     draft: Draft = Draft.load_from_file(file_path,
+                                        preset=get_preset(note_count),
                                         transposition=transposition,
                                         remove_blank=remove_blank,
                                         skip_near_notes=skip_near_notes,
                                         bpm=bpm)
     if draft.notes:
-        length: float = draft.notes[-1].time * LENGTH_MM_PER_BEAT * scale
+        length: float = draft.notes[-1].time * get_preset(note_count, music_box_30_notes).length_mm_per_beat * scale
     else:
         length = 0
 

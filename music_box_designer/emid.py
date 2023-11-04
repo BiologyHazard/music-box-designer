@@ -14,19 +14,6 @@ EMID_PITCHES: list[int] = [93, 91, 89, 88, 87, 86, 85, 84, 83, 82,
                            81, 80, 79, 78, 77, 76, 75, 74, 73, 72,
                            71, 70, 69, 67, 65, 64, 62, 60, 55, 53]
 
-# def pitch_to_mbindex(pitch: int) -> int:
-#     try:
-#         return 29 - MUSIC_BOX_30_NOTES_PITCH.index(pitch)
-#     except ValueError:
-#         raise ValueError(f'Pitch {pitch} not in range of 30 notes music box.')
-
-
-# def mbindex_to_pitch(mbindex: int) -> int:
-#     if mbindex in range(30):
-#         return MUSIC_BOX_30_NOTES_PITCH[29 - mbindex]
-#     else:
-#         raise ValueError('mbindex must be int in range(30)')
-
 
 @dataclass(frozen=True)
 class EmidNote:
