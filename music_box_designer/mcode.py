@@ -14,7 +14,6 @@ from PIL import Image, ImageDraw
 from mido import Message, MidiFile, MidiTrack
 
 from .consts import MIDI_DEFAULT_TICKS_PER_BEAT, DEFAULT_DURATION
-from .draft import draw_circle, mm_to_pixel, pos_mm_to_pixel
 from .log import logger
 from .presets import music_box_30_notes
 
@@ -288,6 +287,8 @@ class MCodeFile:
         return midi_file
 
     def generate_pic(self, ppi: float = 300) -> Image.Image:
+        from .draft import draw_circle, mm_to_pixel, pos_mm_to_pixel
+
         notes: list[MCodeNote] = list(messages_to_notes(self.messages, ignore_M90_M80_Y=False))
         tick = notes[-1].tick if notes else 0
         length: float = tick / self.ppq * music_box_30_notes.length_mm_per_beat

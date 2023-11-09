@@ -17,6 +17,7 @@ from pydantic_extra_types.color import Color
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
 from .fmp import FmpFile
 from .log import logger
+from .mcode import MCodeFile
 from .presets import MusicBox, music_box_30_notes, music_box_presets
 
 DEFAULT_BPM: float = 120
@@ -286,8 +287,15 @@ class Draft:
                                           remove_blank=remove_blank,
                                           skip_near_notes=skip_near_notes,
                                           bpm=bpm)
+            case '.mcode':  # 先偷个懒
+                return cls.load_from_midi(MCodeFile.open(file_path).export_midi(),
+                                          preset=preset,
+                                          transposition=transposition,
+                                          remove_blank=remove_blank,
+                                          skip_near_notes=skip_near_notes,
+                                          bpm=bpm)
             case other:
-                raise ValueError(f"The file extension must be '.emid', '.fmp' or '.mid', but got {repr(other)}.")
+                raise ValueError(f"The file extension must be '.emid', '.fmp', '.mid' or '.mcode', but got {repr(other)}.")
 
     @classmethod
     def load_from_emid(cls,
