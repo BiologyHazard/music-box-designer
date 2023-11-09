@@ -62,13 +62,14 @@ def _get_note_lines(notes: list[MCodeNote]) -> list[_NoteLine]:
 
 
 def get_arranged_notes(notes: list[MCodeNote], ppq: int = DEFAULT_PPQ) -> list[MCodeNote]:
-    """Do we have an algorithm which uses O(1) extra space?"""
+    # Do we have an algorithm which uses O(1) extra space?
+    notes = sorted(notes, key=lambda note: (note.tick, note.pitch_index))
     note_lines: list[_NoteLine] = _get_note_lines(notes)
 
     distance_positive: float = 0  # Positive means from lowest to highest
     distance_negative: float = 0  # Negative means from highest to lowest
-    routine_positive: list[bool] = []  # True for positive, False for negative
-    routine_negative: list[bool] = []
+    route_positive: list[bool] = []  # True for positive, False for negative
+    route_negative: list[bool] = []
     for i in range(len(note_lines)):
         previous_note_line = note_lines[i - 1] if i > 0 else note_lines[0]
         current_note_line = note_lines[i]
@@ -94,19 +95,12 @@ def get_arranged_notes(notes: list[MCodeNote], ppq: int = DEFAULT_PPQ) -> list[M
             ppq,
         )
 
-        if distance_positive_positive < distance_negative_positive:
-            distance_positive = distance_positive_positive
-            routine_positive.append(True)
-        else:
-            distance_positive = distance_negative_positive
-            routine_positive.append(False)
-        if distance_positive_negative < distance_negative_negative:
-            distance_negative = distance_positive_negative
-            routine_negative.append(True)
-        else:
-            distance_negative = distance_negative_negative
-            routine_negative.append(False)
+        distance_positive = min(distance_positive_positive, distance_negative_positive)
+        route_positive.append(distance_positive_positive < distance_negative_positive)
+        distance_negative = min(distance_positive_negative, distance_negative_negative)
+        route_negative.append(distance_positive_negative < distance_negative_negative)
 
+        # It doesn't matter whether current_line_distance is added or not.
         current_line_distance: float = calculate_distance(
             0,
             current_note_line.pitch_indexes[-1] - current_note_line.pitch_indexes[0],
@@ -115,28 +109,19 @@ def get_arranged_notes(notes: list[MCodeNote], ppq: int = DEFAULT_PPQ) -> list[M
         distance_positive += current_line_distance
         distance_negative += current_line_distance
 
-    if distance_positive < distance_negative:
-        # distance = distance_positive
-        final_routine: bool = True
-    else:
-        # distance = distance_negative
-        final_routine = False
-
-    routine_reversed: list[bool] = []
-    current_routine: bool = final_routine
+    final_direction: bool = distance_positive < distance_negative
+    route_reversed: list[bool] = []
+    current_direction: bool = final_direction
     for i in reversed(range(len(note_lines))):
-        # len(routine_positive) == len(routine_negative) == len(note_lines)
-        # routine_positive[0] and routine_negative[0] are meaningless.
-        routine_reversed.append(current_routine)
-        if current_routine is True:
-            current_routine = routine_positive[i]
-        else:
-            current_routine = routine_negative[i]
-    routine = list(reversed(routine_reversed))
+        # Work backwards to find the route.
+        # route_positive, route_negative, note_lines have the same length.
+        # route_positive[0] and route_negative[0] are meaningless.
+        route_reversed.append(current_direction)
+        current_direction = route_positive[i] if current_direction else route_negative[i]
 
     notes_arranged: list[MCodeNote] = []
-    for note_line, direction in zip(note_lines, routine):
-        if direction is True:
+    for note_line, direction in zip(note_lines, reversed(route_reversed)):
+        if direction:
             notes_arranged.extend(
                 MCodeNote(pitch_index=pitch_index, tick=note_line.tick)
                 for pitch_index in note_line.pitch_indexes
@@ -188,7 +173,7 @@ class MCodeFile:
         return cls.from_lines(s.splitlines())
 
     @classmethod
-    def from_lines(cls, lines: list[str]) -> Self:
+    def from_lines(cls, lines: Iterable[str]) -> Self:
         mcode_file: Self = cls(comments=[])
         for line in lines:
             if not line:
@@ -228,7 +213,6 @@ class MCodeFile:
                     notes.append(MCodeNote(pitch_index + 1,
                                            round(midi_tick / midi_file.ticks_per_beat * mcode_file.ppq)))
 
-        notes.sort(key=lambda note: (note.tick, note.pitch_index))
         notes = get_arranged_notes(notes, mcode_file.ppq)
 
         mcode_file.messages.append(MCodeMessage(90, 500, 0))
