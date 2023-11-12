@@ -4,7 +4,7 @@
 # 关于颜色的配置支持以下格式：
 # - 颜色名称，例如 'red', 'lightgreen', 'darkblue'
 # - 短 hex 表示，例如 '#000', '0xFfF', '123'
-# - 长 hex 表示，例如 '#000000', '0xFFffFF', '112233'
+# - 长 hex 表示，例如 '#000000', '0xFffFfF', '112233'
 # - rgb(<r>, <g>, <b>)，例如 'rgb(255, 0, 0)'
 # - rgba(<r>, <g>, <b>, <a>)，例如 'rgba(255, 0, 0, 0.8)'
 # - 'transparent'
@@ -113,6 +113,13 @@ custom_watermark: 自定义水印
 custom_watermark_size: 6.0
 # 自定义水印颜色
 custom_watermark_color: '#00000060'
+
+# 是否显示打孔路径
+show_note_path: false
+# 打孔路径颜色
+note_path_color: red
+# 打孔路径宽度，单位毫米，将以 round(note_path_width * ppi / MM_PER_INCH) 转变为像素大小
+note_path_width: 0.5
 
 # 整拍线条颜色
 whole_beat_line_color: black

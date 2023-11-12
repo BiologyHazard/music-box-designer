@@ -4,12 +4,13 @@ from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal, Self, overload
 
 import mido
 import yaml
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFont
 from mido import MidiFile
 from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, PositiveInt, field_serializer, field_validator
 from pydantic_extra_types.color import Color
@@ -17,7 +18,7 @@ from pydantic_extra_types.color import Color
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
 from .fmp import FmpFile
 from .log import logger
-from .mcode import MCodeFile
+from .mcode import DEFAULT_PPQ, MCodeFile, MCodeNote, get_arranged_notes
 from .presets import MusicBox, music_box_30_notes, music_box_presets
 
 DEFAULT_BPM: float = 120
@@ -57,6 +58,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     # 标题设置
     show_info: bool = True
     '''信息显示总开关'''
+
     show_title: bool = True
     '''是否显示标题'''
     title_align: Literal['left', 'center', 'right'] = 'center'
@@ -67,6 +69,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''标题文字大小，单位毫米，将以`round(title_size * ppi / MM_PER_INCH)`转变为像素大小'''
     title_color: Color = Color('black')
     '''标题颜色'''
+
     show_subtitle: bool = True
     '''是否显示副标题'''
     subtitle_align: Literal['left', 'center', 'right'] = 'center'
@@ -77,6 +80,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''副标题文字大小，单位毫米，将以`round(subtitle_size * ppi / MM_PER_INCH)`转变为像素大小'''
     subtitle_color: Color = Color('black')
     '''副标题颜色'''
+
     show_tempo: bool = True
     '''是否显示乐曲速度信息'''
     tempo_format: str = '{bpm:.0f}bpm'
@@ -93,22 +97,26 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     # 谱面设置
     body_height: FiniteFloat | None = None
     '''谱面到页面上边的距离，单位毫米，设置为`None`则自动'''
+
     note_color: Color = Color('black')
     '''音符颜色'''
     note_radius: NonNegativeFloat = 1.04
     '''音符半径，单位毫米'''
+
     show_column_info: bool = True
     '''是否在每栏右上角显示`music_info`以及栏号'''
     column_info_size: NonNegativeFloat = 6.0
     '''栏信息文字大小，单位毫米，将以`round(column_info_size * ppi / MM_PER_INCH)`转变为像素大小'''
     column_info_color: Color = Color('#00000080')
     '''栏信息颜色'''
+
     show_column_num: bool = True
     '''是否显示栏下方页码'''
     column_num_size: NonNegativeFloat = 3.0
     '''栏下方页码文字大小，单位毫米，将以`round(column_num_size * ppi / MM_PER_INCH)`转变为像素大小'''
     column_num_color: Color = Color('black')
     '''栏下方页码颜色'''
+
     show_bar_num: bool = True
     '''是否显示小节号'''
     beats_per_bar: PositiveInt | None = None
@@ -119,6 +127,7 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''小节号文字大小，单位毫米，将以`round(bar_num_size * ppi / MM_PER_INCH)`转变为像素大小'''
     bar_num_color: Color = Color('black')
     '''小节号颜色'''
+
     show_custom_watermark: bool = False
     '''是否显示自定义水印'''
     custom_watermark: str = '自定义水印'
@@ -127,6 +136,14 @@ class DraftSettings(BaseModel, arbitrary_types_allowed=True):
     '''自定义水印文字大小，单位毫米，将以`round(custom_watermark_size * ppi / MM_PER_INCH)`转变为像素大小'''
     custom_watermark_color: Color = Color('#00000060')
     '''自定义水印颜色'''
+
+    show_note_path: bool = False
+    '''是否显示打孔路径'''
+    note_path_color: Color = Color('red')
+    '''打孔路径颜色'''
+    note_path_width: NonNegativeFloat = 0.5
+    '''打孔路径宽度，单位毫米，将以`round(note_path_width * ppi / MM_PER_INCH)`转变为像素大小'''
+
     whole_beat_line_color: Color = Color('black')
     '''整拍线条颜色'''
     half_beat_line_type: Literal['solid', 'dashed'] = 'solid'
@@ -854,14 +871,11 @@ class Draft:
                     'rm',
                 )
 
-        # 音符
-        logger.debug('Drawing notes...')
-        for note in self.notes:
+        def calculate_pos(note: Note) -> tuple[int, int, tuple[int, int]]:
             try:
                 index: int = self.preset.range.index(note.pitch)
             except ValueError:
-                logger.warning(f'{note} out of range, SKIPPING!')
-                continue
+                raise ValueError(f'{note} out of range, SKIPPING!')
             col: int = math.floor((note.time * scale - first_col_rows + rows_per_col) / rows_per_col)
             page: int = col // cols_per_page
             col_in_page: int = col % cols_per_page
@@ -869,14 +883,49 @@ class Draft:
             row_in_col: float = (note.time * scale
                                  if col == 0 else
                                  (note.time * scale - first_col_rows + rows_per_col) % rows_per_col)
+            xy: tuple[int, int] = pos_mm_to_pixel(
+                (first_col_x + col_in_page * self.preset.col_width
+                    + self.preset.left_border + index * self.preset.grid_width,
+                    current_col_y + row_in_col * self.preset.length_mm_per_beat),
+                settings.ppi,
+                'floor',
+            )
+            return page, col, xy
+
+        # 音符路径
+        if settings.show_note_path:
+            logger.debug('Drawing note paths...')
+
+            mcode_notes: list[MCodeNote] = sorted(
+                (MCodeNote(pitch_index=self.preset.range.index(note.pitch) + 1,
+                           tick=round(note.time * DEFAULT_PPQ))
+                 for note in self.notes),
+                key=lambda note: (note.tick, note.pitch_index),
+            )
+            mcode_notes = get_arranged_notes(mcode_notes)
+            notes: list[Note] = [Note(pitch=self.preset.range[note.pitch_index - 1],
+                                      time=note.tick / DEFAULT_PPQ)
+                                 for note in mcode_notes]
+            for note0, note1 in pairwise(notes):
+                page0, col0, pos0 = calculate_pos(note0)
+                page1, col1, pos1 = calculate_pos(note1)
+                if col0 != col1:
+                    continue
+                draw_line(
+                    images[page0],
+                    (pos0, pos1),
+                    mm_to_pixel(settings.note_path_width, settings.ppi),
+                    settings.note_path_color.as_hex(),
+                    anti_alias='accurate' if settings.anti_alias == 'fast' else settings.anti_alias,
+                )
+
+        # 音符
+        logger.debug('Drawing notes...')
+        for note in self.notes:
+            page, col, pos = calculate_pos(note)
             draw_circle(
                 images[page],
-                pos_mm_to_pixel(
-                    (first_col_x + col_in_page * self.preset.col_width
-                     + self.preset.left_border + index * self.preset.grid_width,
-                     current_col_y + row_in_col * self.preset.length_mm_per_beat),
-                    settings.ppi, None,
-                ),
+                pos,
                 mm_to_pixel(settings.note_radius, settings.ppi),
                 settings.note_color.as_hex(),
                 anti_alias=settings.anti_alias,
@@ -1017,6 +1066,8 @@ def mix_number(foreground: float, background: float, alpha: float) -> float:
     return foreground * alpha + background * (1 - alpha)
 
 
+# type RGBA = tuple[float, float, float, float]
+
 # def mix_tuple(foreground: tuple[float, ...], background: tuple[float, ...], alpha: float) -> tuple[float, ...]:
 #     assert len(foreground) == len(background), ValueError('foreground and background must have same length.')
 #     return tuple(mix_number(x, y, alpha) for x, y in zip(foreground, background))
@@ -1024,50 +1075,75 @@ def mix_number(foreground: float, background: float, alpha: float) -> float:
 # def round_tuple(x: tuple[float, ...], /) -> tuple[int, ...]:
 #     return tuple(round(y) for y in x)
 
+# def mix_color_number(foreground_number: float,
+#                      foreground_alpha: float,
+#                      background_number: float,
+#                      background_alpha: float,
+#                      alpha: float) -> float:
+#     return ((background_number * background_alpha * (1 - alpha * foreground_alpha)
+#              + foreground_number * alpha * foreground_alpha)
+#             / (background_alpha + alpha * foreground_alpha - background_alpha * alpha * foreground_alpha))
 
-def _get_circle_image(mode: str,
-                      center: tuple[float, float],
+# def mix_color_alpha(foreground_alpha: float, background_alpha: float, alpha: float) -> float:
+#     return background_alpha + alpha * foreground_alpha - background_alpha * alpha * foreground_alpha
+
+# def mix_color(foreground: RGBA, background: RGBA, alpha: float) -> RGBA:
+#     foreground_color = foreground[:3]
+#     foreground_alpha = foreground[3]
+#     background_color = background[:3]
+#     background_alpha = background[3]
+#     if alpha == 0:
+#         return background
+#     elif alpha == 1:
+#         return foreground
+#     else:
+#         return (tuple(mix_color_number(foreground_number, foreground_alpha, background_number, background_alpha, alpha)
+#                       for foreground_number, background_number in zip(foreground_color, background_color))
+#                 + (mix_color_alpha(foreground_alpha, background_alpha, alpha),))
+
+
+def _get_circle_image(center: tuple[float, float],
                       radius: float,
                       color) -> tuple[Image.Image, tuple[int, int]]:
     center_x, center_y = center
+    color_rgba: tuple[int, int, int, int] = ImageColor.getcolor(color, 'RGBA')  # type: ignore
+    color_rgb: tuple[int, int, int] = color_rgba[:3]
+    color_alpha: int = color_rgba[3]
     left_x: int = math.floor(center_x - radius)
     right_x: int = math.ceil(center_x + radius)
     top_y: int = math.floor(center_y - radius)
     bottom_y: int = math.ceil(center_y + radius)
-    mask_width: int = right_x - left_x
-    mask_height: int = bottom_y - top_y
-    center_in_mask_x: float = center_x - left_x
-    center_in_mask_y: float = center_y - top_y
-    mask: Image.Image = Image.new('L', (mask_width, mask_height), 255)
-    draw: ImageDraw.ImageDraw = ImageDraw.Draw(mask)
-    for x in range(mask_width):
-        for y in range(mask_height):
-            distance: float = math.dist((center_in_mask_x, center_in_mask_y), (x + 1 / 2, y + 1 / 2))
+    layer_width: int = right_x - left_x
+    layer_height: int = bottom_y - top_y
+    layer: Image.Image = Image.new('RGBA', (layer_width, layer_height))
+    draw: ImageDraw.ImageDraw = ImageDraw.Draw(layer)
+    for x_in_layer in range(layer_width):
+        for y_in_layer in range(layer_height):
+            x: float = x_in_layer + left_x + 1 / 2
+            y: float = y_in_layer + top_y + 1 / 2
+            distance: float = math.dist(center, (x, y))
             alpha: float = calc_alpha(radius, distance)
-            mask_color: float = mix_number(0, 255, alpha)
-            draw.point((x, y), round(mask_color))
-    return (Image.composite(Image.new(mode, (mask_width, mask_height)),
-                            Image.new(mode, (mask_width, mask_height), color),
-                            mask),
-            (left_x, top_y))
+            if alpha == 0:
+                continue
+            layer_color: tuple[int, int, int, int] = color_rgb + (round(color_alpha * alpha),)
+            draw.point((x_in_layer, y_in_layer), layer_color)
+    return layer, (left_x, top_y)
 
 
 @lru_cache
-def _get_circle_image_with_cache(mode: str,
-                                 center: tuple[float, float],
+def _get_circle_image_with_cache(center: tuple[float, float],
                                  radius: float,
                                  color: Any) -> tuple[Image.Image, tuple[int, int]]:
-    return _get_circle_image(mode, center, radius, color)
+    return _get_circle_image(center, radius, color)
 
 
-def get_circle_image(mode: str,
-                     center: tuple[float, float],
+def get_circle_image(center: tuple[float, float],
                      radius: float,
                      color) -> tuple[Image.Image, tuple[int, int]]:
     if center == (1 / 2, 1 / 2):
-        return _get_circle_image_with_cache(mode, center, radius, color)
+        return _get_circle_image_with_cache(center, radius, color)
     else:
-        return _get_circle_image(mode, center, radius, color)
+        return _get_circle_image(center, radius, color)
 
 
 def draw_circle(image: Image.Image,
@@ -1085,13 +1161,121 @@ def draw_circle(image: Image.Image,
 
         case 'fast':
             center_x, center_y = center
-            circle_image, destination = get_circle_image(image.mode, (1 / 2, 1 / 2), radius, color)
+            circle_image, destination = get_circle_image((1 / 2, 1 / 2), radius, color)
             delta_x, delta_y = destination
             image.alpha_composite(circle_image, (math.floor(center_x) + delta_x, math.floor(center_y) + delta_y))
 
         case 'accurate':
-            circle_image, destination = get_circle_image(image.mode, center, radius, color)
+            circle_image, destination = get_circle_image(center, radius, color)
             image.alpha_composite(circle_image, destination)
+
+        case _:
+            raise ValueError
+
+
+type Vector_2d = tuple[float, float]
+
+
+def dot_product_2d(vector_1: Vector_2d, vector_2: Vector_2d, /) -> float:
+    return vector_1[0] * vector_2[0] + vector_1[1] * vector_2[1]
+
+
+def distance_point_to_line_ABC(point: Vector_2d, line_A: float, line_B: float, line_C: float, abs_: bool = True):
+    x, y = point
+    distance_with_sign: float = (line_A * x + line_B * y + line_C) / math.hypot(line_A, line_B)
+    return abs(distance_with_sign) if abs_ else distance_with_sign
+
+
+def distance_point_to_line_xy(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]):
+    (x0, y0), (x1, y1) = line_xy
+    line_A = y1 - y0
+    line_B = x0 - x1
+    line_C = x1 * y0 - x0 * y1
+    return distance_point_to_line_ABC(point, line_A, line_B, line_C)
+
+
+def distance_point_to_line_segment(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]):
+    x, y = point
+    (x0, y0), (x1, y1) = line_xy
+    vector_AB: Vector_2d = (x1 - x0, y1 - y0)
+    vector_AP: Vector_2d = (x - x0, y - y0)
+    vector_BP: Vector_2d = (x - x1, y - y1)
+    is_in_A_side: bool = dot_product_2d(vector_AB, vector_AP) < 0
+    is_in_B_side: bool = dot_product_2d(vector_AB, vector_BP) >= 0  # Vector_BA * Vector_BP < 0
+    if is_in_A_side:
+        return math.dist(point, line_xy[0])
+    elif is_in_B_side:
+        return math.dist(point, line_xy[1])
+    else:  # middle
+        return distance_point_to_line_xy(point, line_xy)
+
+
+def get_line_image(line_xy: tuple[tuple[float, float], tuple[float, float]],
+                   color,
+                   width: float) -> tuple[Image.Image, tuple[int, int]]:
+    (x0, y0), (x1, y1) = line_xy
+    delta_x: float = x1 - x0
+    delta_y: float = y1 - y0
+    if abs(delta_y) > abs(delta_x):  # avoid ZeroDivisionError or accuracy loss
+        image, (destination_y, destination_x) = get_line_image(((y0, x0), (y1, x1)), color, width)
+        return image.transpose(Image.Transpose.TRANSVERSE), (destination_x, destination_y)
+
+    slope: float = delta_y / delta_x
+    sec_alpha: float = math.hypot(1, slope)
+
+    color_rgba: tuple[int, int, int, int] = ImageColor.getcolor(color, 'RGBA')  # type: ignore
+    color_rgb: tuple[int, int, int] = color_rgba[:3]
+    color_alpha: int = color_rgba[3]
+
+    left_x: int = math.floor(min(x0, x1) - width / 2)
+    right_x: int = math.ceil(max(x0, x1) + width / 2)
+    top_y: int = math.floor(min(y0, y1) - width / 2)
+    bottom_y: int = math.ceil(max(y0, y1) + width / 2)
+    layer_width: int = right_x - left_x
+    layer_height: int = bottom_y - top_y
+    layer: Image.Image = Image.new('RGBA', (layer_width, layer_height))
+    draw: ImageDraw.ImageDraw = ImageDraw.Draw(layer)
+    for x_in_layer in range(layer_width):
+        x: float = x_in_layer + left_x + 1 / 2
+        intersection_y: float = slope * (x - x0) + y0
+        down_border: float = intersection_y - (width / 2 + 1 / 2) * sec_alpha
+        up_border: float = intersection_y + (width / 2 + 1 / 2) * sec_alpha
+        possible_min: int = max(0, round(down_border) - top_y)
+        possible_max: int = min(layer_height, round(up_border) - top_y)
+        # for y_in_layer in range(layer_height):
+        for y_in_layer in range(possible_min, possible_max):
+            y: float = y_in_layer + top_y + 1 / 2
+            distance: float = distance_point_to_line_segment((x, y), line_xy)
+            alpha: float = calc_alpha(width / 2, distance)
+            # if alpha == 0 and (y_in_layer in range(possible_min, possible_max)):
+            #     draw.point((x_in_layer, y_in_layer), '#00FF00')
+            #     continue
+            # if alpha > 0 and (y_in_layer not in range(possible_min, possible_max)):
+            #     draw.point((x_in_layer, y_in_layer), '#FF0000')
+            #     logger.critical('')
+            #     continue
+            if alpha == 0:
+                continue
+            layer_color: tuple[int, int, int, int] = color_rgb + (round(color_alpha * alpha),)
+            draw.point((x_in_layer, y_in_layer), layer_color)
+    return layer, (left_x, top_y)
+
+
+def draw_line(image: Image.Image,
+              line_xy: tuple[tuple[float, float], tuple[float, float]],
+              width: float,
+              color,
+              anti_alias: Literal['off', 'accurate'] = 'accurate') -> None:
+    (x0, y0), (x1, y1) = line_xy
+    match anti_alias:
+        case 'off':
+            draw: ImageDraw.ImageDraw = ImageDraw.Draw(image)
+            line_xy = (math.floor(x0), math.floor(y0)), (math.floor(x1), math.floor(y1))
+            draw.line(line_xy, color, round(width))
+
+        case 'accurate':
+            line_image, destination = get_line_image(line_xy, color, width)
+            image.alpha_composite(line_image, destination)
 
         case _:
             raise ValueError
