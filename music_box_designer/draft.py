@@ -1186,15 +1186,15 @@ def distance_point_to_line_ABC(point: Vector_2d, line_A: float, line_B: float, l
     return abs(distance_with_sign) if abs_ else distance_with_sign
 
 
-def distance_point_to_line_xy(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]):
+def distance_point_to_line_xy(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]) -> float:
     (x0, y0), (x1, y1) = line_xy
-    line_A = y1 - y0
-    line_B = x0 - x1
-    line_C = x1 * y0 - x0 * y1
+    line_A: float = y1 - y0
+    line_B: float = x0 - x1
+    line_C: float = x1 * y0 - x0 * y1
     return distance_point_to_line_ABC(point, line_A, line_B, line_C)
 
 
-def distance_point_to_line_segment(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]):
+def distance_point_to_line_segment(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]) -> float:
     x, y = point
     (x0, y0), (x1, y1) = line_xy
     vector_AB: Vector_2d = (x1 - x0, y1 - y0)
@@ -1216,7 +1216,7 @@ def get_line_image(line_xy: tuple[tuple[float, float], tuple[float, float]],
     (x0, y0), (x1, y1) = line_xy
     delta_x: float = x1 - x0
     delta_y: float = y1 - y0
-    if abs(delta_y) > abs(delta_x):  # avoid ZeroDivisionError or accuracy loss
+    if abs(delta_y) > abs(delta_x):  # Avoid ZeroDivisionError or accuracy loss
         image, (destination_y, destination_x) = get_line_image(((y0, x0), (y1, x1)), color, width)
         return image.transpose(Image.Transpose.TRANSVERSE), (destination_x, destination_y)
 
@@ -1242,18 +1242,10 @@ def get_line_image(line_xy: tuple[tuple[float, float], tuple[float, float]],
         up_border: float = intersection_y + (width / 2 + 1 / 2) * sec_alpha
         possible_min: int = max(0, round(down_border) - top_y)
         possible_max: int = min(layer_height, round(up_border) - top_y)
-        # for y_in_layer in range(layer_height):
         for y_in_layer in range(possible_min, possible_max):
             y: float = y_in_layer + top_y + 1 / 2
             distance: float = distance_point_to_line_segment((x, y), line_xy)
             alpha: float = calc_alpha(width / 2, distance)
-            # if alpha == 0 and (y_in_layer in range(possible_min, possible_max)):
-            #     draw.point((x_in_layer, y_in_layer), '#00FF00')
-            #     continue
-            # if alpha > 0 and (y_in_layer not in range(possible_min, possible_max)):
-            #     draw.point((x_in_layer, y_in_layer), '#FF0000')
-            #     logger.critical('')
-            #     continue
             if alpha == 0:
                 continue
             layer_color: tuple[int, int, int, int] = color_rgb + (round(color_alpha * alpha),)

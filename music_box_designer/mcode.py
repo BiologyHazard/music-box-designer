@@ -274,7 +274,7 @@ class MCodeFile:
         from .draft import draw_circle, mm_to_pixel, pos_mm_to_pixel
 
         notes: list[MCodeNote] = list(messages_to_notes(self.messages, ignore_M90_M80_Y=False))
-        tick = notes[-1].tick if notes else 0
+        tick: int = notes[-1].tick if notes else 0
         length: float = tick / self.ppq * music_box_30_notes.length_mm_per_beat
         image_size: tuple[int, int] = pos_mm_to_pixel((music_box_30_notes.col_width, length), ppi, 'round')
         image: Image.Image = Image.new('RGBA', image_size, 'white')
