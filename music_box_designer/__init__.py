@@ -222,7 +222,7 @@ def get_note_count_and_length(file_path: str | Path,
                                         skip_near_notes=skip_near_notes,
                                         bpm=bpm)
     if draft.notes:
-        length: float = draft.notes[-1].time * get_preset(note_count, music_box_30_notes).length_mm_per_beat * scale
+        length: float = draft.notes[-1].time * draft.preset.length_mm_per_beat * scale
     else:
         length = 0
 

@@ -1007,6 +1007,9 @@ def get_midi_time_signature(midi_file: MidiFile) -> tuple[int, int] | None:
 
 
 MM_PER_INCH = 25.4
+type Point_T = tuple[float, float]
+type Vector_T = Point_T
+type XY_T = tuple[Point_T, Point_T]
 
 
 def mm_to_pixel(x: float, /, ppi: float) -> float:
@@ -1018,18 +1021,18 @@ def pixel_to_mm(x: float, /, ppi: float) -> float:
 
 
 @overload
-def pos_mm_to_pixel(pos: tuple[float, float],
+def pos_mm_to_pixel(pos: Point_T,
                     ppi: float,
                     method: None = ...) -> tuple[float, float]: ...
 
 
 @overload
-def pos_mm_to_pixel(pos: tuple[float, float],
+def pos_mm_to_pixel(pos: Point_T,
                     ppi: float,
                     method: Literal['floor', 'round'] = ...) -> tuple[int, int]: ...
 
 
-def pos_mm_to_pixel(pos: tuple[float, float],
+def pos_mm_to_pixel(pos: Point_T,
                     ppi: float,
                     method: Literal['floor', 'round', None] = 'round') -> tuple[float, float] | tuple[int, int]:
     x, y = pos
@@ -1102,7 +1105,7 @@ def mix_number(foreground: float, background: float, alpha: float) -> float:
 #                 + (mix_color_alpha(foreground_alpha, background_alpha, alpha),))
 
 
-def _get_circle_image(center: tuple[float, float],
+def _get_circle_image(center: Point_T,
                       radius: float,
                       color) -> tuple[Image.Image, tuple[int, int]]:
     center_x, center_y = center
@@ -1131,13 +1134,13 @@ def _get_circle_image(center: tuple[float, float],
 
 
 @lru_cache
-def _get_circle_image_with_cache(center: tuple[float, float],
+def _get_circle_image_with_cache(center: Point_T,
                                  radius: float,
                                  color: Any) -> tuple[Image.Image, tuple[int, int]]:
     return _get_circle_image(center, radius, color)
 
 
-def get_circle_image(center: tuple[float, float],
+def get_circle_image(center: Point_T,
                      radius: float,
                      color) -> tuple[Image.Image, tuple[int, int]]:
     if center == (1 / 2, 1 / 2):
@@ -1147,7 +1150,7 @@ def get_circle_image(center: tuple[float, float],
 
 
 def draw_circle(image: Image.Image,
-                center: tuple[float, float],
+                center: Point_T,
                 radius: float,
                 color,
                 anti_alias: Literal['off', 'fast', 'accurate'] = 'fast') -> None:
@@ -1173,20 +1176,19 @@ def draw_circle(image: Image.Image,
             raise ValueError
 
 
-type Vector_2d = tuple[float, float]
+def dot_product_2d(vector_0: Vector_T, vector_1: Vector_T, /) -> float:
+    x0, y0 = vector_0
+    x1, y1 = vector_1
+    return x0 * x1 + y0 * y1
 
 
-def dot_product_2d(vector_1: Vector_2d, vector_2: Vector_2d, /) -> float:
-    return vector_1[0] * vector_2[0] + vector_1[1] * vector_2[1]
-
-
-def distance_point_to_line_ABC(point: Vector_2d, line_A: float, line_B: float, line_C: float, abs_: bool = True):
+def distance_point_to_line_ABC(point: Point_T, line_A: float, line_B: float, line_C: float, abs_: bool = True) -> float:
     x, y = point
     distance_with_sign: float = (line_A * x + line_B * y + line_C) / math.hypot(line_A, line_B)
     return abs(distance_with_sign) if abs_ else distance_with_sign
 
 
-def distance_point_to_line_xy(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]) -> float:
+def distance_point_to_line_xy(point: Point_T, line_xy: XY_T) -> float:
     (x0, y0), (x1, y1) = line_xy
     line_A: float = y1 - y0
     line_B: float = x0 - x1
@@ -1194,12 +1196,12 @@ def distance_point_to_line_xy(point: Vector_2d, line_xy: tuple[Vector_2d, Vector
     return distance_point_to_line_ABC(point, line_A, line_B, line_C)
 
 
-def distance_point_to_line_segment(point: Vector_2d, line_xy: tuple[Vector_2d, Vector_2d]) -> float:
+def distance_point_to_line_segment(point: Point_T, line_xy: XY_T) -> float:
     x, y = point
     (x0, y0), (x1, y1) = line_xy
-    vector_AB: Vector_2d = (x1 - x0, y1 - y0)
-    vector_AP: Vector_2d = (x - x0, y - y0)
-    vector_BP: Vector_2d = (x - x1, y - y1)
+    vector_AB: Vector_T = (x1 - x0, y1 - y0)
+    vector_AP: Vector_T = (x - x0, y - y0)
+    vector_BP: Vector_T = (x - x1, y - y1)
     is_in_A_side: bool = dot_product_2d(vector_AB, vector_AP) < 0
     is_in_B_side: bool = dot_product_2d(vector_AB, vector_BP) >= 0  # Vector_BA * Vector_BP < 0
     if is_in_A_side:
@@ -1210,7 +1212,7 @@ def distance_point_to_line_segment(point: Vector_2d, line_xy: tuple[Vector_2d, V
         return distance_point_to_line_xy(point, line_xy)
 
 
-def get_line_image(line_xy: tuple[tuple[float, float], tuple[float, float]],
+def get_line_image(line_xy: XY_T,
                    color,
                    width: float) -> tuple[Image.Image, tuple[int, int]]:
     (x0, y0), (x1, y1) = line_xy
@@ -1254,7 +1256,7 @@ def get_line_image(line_xy: tuple[tuple[float, float], tuple[float, float]],
 
 
 def draw_line(image: Image.Image,
-              line_xy: tuple[tuple[float, float], tuple[float, float]],
+              line_xy: XY_T,
               width: float,
               color,
               anti_alias: Literal['off', 'accurate'] = 'accurate') -> None:
