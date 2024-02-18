@@ -1,11 +1,13 @@
-__all__: list[str] = ['logger',
-                      'emid_to_midi',
-                      'midi_to_emid',
-                      'fmp_to_midi',
-                      'midi_to_fmp',
-                      'convert',
-                      'generate_draft',
-                      'get_note_count_and_length']
+__all__: list[str] = [
+    'logger',
+    'emid_to_midi',
+    'midi_to_emid',
+    'fmp_to_midi',
+    'midi_to_fmp',
+    'convert',
+    'generate_draft',
+    'get_note_count_and_length',
+]
 
 from collections.abc import Callable
 from pathlib import Path

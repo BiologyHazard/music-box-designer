@@ -607,7 +607,7 @@ class Draft:
             custom_watermark_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.custom_watermark_size, settings.ppi)))
 
-            for i, row in enumerate(range(0, rows, 10)):
+            for row in range(0, rows, 10):
                 col: int = math.floor((row - first_col_rows + rows_per_col) / rows_per_col)
                 page: int = col // cols_per_page
                 col_in_page: int = col % cols_per_page
@@ -621,7 +621,7 @@ class Draft:
                     settings.custom_watermark_color.as_hex(),
                     custom_watermark_font,
                     'mm',
-                    align='center'
+                    align='center',
                 )
 
         # 分隔线

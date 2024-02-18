@@ -243,7 +243,7 @@ class FmpFile:
             comment: str = '',
             add_channel: bool = True,
             add_empty_track: bool = True) -> Self:
-        # I'm not sure whether change the fmp_file.ticks_per_beat attribute to a value other than
+        # I'm not sure whether changing the fmp_file.ticks_per_beat attribute to a value other than
         # FMP_DEFAULT_TICKS_PER_BEAT (=96) is a good behavior. So by now the parameter is not added to this function.
         fmp_file: Self = cls(title=title,
                              subtitle=subtitle,
