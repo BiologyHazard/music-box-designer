@@ -1,11 +1,14 @@
 import json
+import struct
 from collections import defaultdict
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
-from typing import Any, BinaryIO, Literal, NamedTuple, Self
+from typing import Annotated, Any, BinaryIO, ClassVar, Literal, NamedTuple, Self
 
 import mido.midifiles.tracks
 from mido import Message, MetaMessage, MidiFile, MidiTrack
+from pydantic import BaseModel, Field, PlainSerializer
 
 from .consts import MIDI_DEFAULT_TICKS_PER_BEAT
 from .log import logger
@@ -77,6 +80,73 @@ class FmpEndMark(FmpTimeMark):
     pass
 
 
+# type EffectorName = Literal['Effect_Reverb', 'Effect_Equalizer', 'Effect_Compressor', 'Effect_Limiter']
+
+def to_str(x):
+    return str(x)
+
+
+type FloatSerializeToStr = Annotated[float, PlainSerializer(to_str)]
+
+
+class FmpEffectorValue(BaseModel):
+    pass
+
+
+class FmpReverbEffectorValue(FmpEffectorValue):
+    mix: FloatSerializeToStr = Field(0.2, alias='_mix')
+    room_size: FloatSerializeToStr = 0.75
+    damping: FloatSerializeToStr = 0.7
+    width: FloatSerializeToStr = 1.0
+
+
+class FmpEqualizerEffectorValue(FmpEffectorValue):
+    values: list[FloatSerializeToStr] = Field(default_factory=lambda: [0.0] * 10)
+
+
+class FmpCompressorEffectorValue(FmpEffectorValue):
+    threshold: FloatSerializeToStr = -10.0
+    ratio: FloatSerializeToStr = 10.0
+    gain: FloatSerializeToStr = 0.0
+    attack: FloatSerializeToStr = 0.01
+    release: FloatSerializeToStr = 0.2
+    knee_width: FloatSerializeToStr = 1.0
+
+
+class FmpLimiterEffectorValue(FmpEffectorValue):
+    threshold: FloatSerializeToStr = 0.0
+    ceiling: FloatSerializeToStr = 0.0
+    release: FloatSerializeToStr = 0.5
+
+
+@dataclass
+class FmpEffector:
+    effector_name: ClassVar[str]
+    enabled: bool = True
+    mix_level: float = 1.0
+    effect_values: FmpEffectorValue = field(default_factory=FmpEffectorValue)
+
+
+@dataclass
+class FmpReverbEffector(FmpEffector):
+    effector_name: ClassVar[Literal['Effect_Reverb']] = 'Effect_Reverb'
+
+
+@dataclass
+class FmpEqualizerEffector(FmpEffector):
+    effector_name: ClassVar[Literal['Effect_Equalizer']] = 'Effect_Equalizer'
+
+
+@dataclass
+class FmpCompressorEffector(FmpEffector):
+    effector_name: ClassVar[Literal['Effect_Compressor']] = 'Effect_Compressor'
+
+
+@dataclass
+class FmpLimiterEffector(FmpEffector):
+    effector_name: ClassVar[Literal['Effect_Limiter']] = 'Effect_Limiter'
+
+
 @dataclass
 class FmpChannel:
     index: int = 0
@@ -86,15 +156,26 @@ class FmpChannel:
     muted: bool = False
     soundfont_name: str = ''
     soundfont_index: int = 0
-    reverb_mix: int = 0
-    reverb_room: int = 750
-    reverb_damping: int = 500
-    reverb_width: int = 1000
-    participate_generate: bool = True
-    transposition: int = 0
-    note_trigger_mode: int = 0
-    inherit: bool = True
-    range: list[int] = field(default_factory=lambda: list(range(128)))
+    participate_generate: bool | None = None
+    transposition: int | None = None
+    note_trigger_mode: int | None = None
+    inherit: bool | None = None
+    range: list[int] | None = None
+    effectors: list[FmpEffector] = field(default_factory=list)
+
+
+# @dataclass
+# class FmpMasterChannel(FmpChannel):
+#     pass
+
+
+# @dataclass
+# class FmpNormalChannel(FmpChannel):
+#     participate_generate: bool = True
+#     transposition: int = 0
+#     note_trigger_mode: int = 0
+#     inherit: bool = True
+#     range: list[int] = field(default_factory=lambda: list(range(128)))
 
 
 instrument_presets: dict[str, dict[str, str]] = {
@@ -104,8 +185,8 @@ instrument_presets: dict[str, dict[str, str]] = {
         'quarter_note_unit_lenght': '8',
         'default_timbre': 'WangMusicBox,0',
         'note_trigger_mode': 'Pizzicato',
-        'transpose': '-7',
-        'range': '60,62,67,69,71,72,74,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,98,100',
+        'transpose': '5',
+        'range': '48,50,55,57,59,60,62,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,86,88',
     },
     'Instrument_Preset_PaperStripMusicBox_20Note': {
         'class': 'Instrument_PaperStripMusicBox',
@@ -113,7 +194,7 @@ instrument_presets: dict[str, dict[str, str]] = {
         'quarter_note_unit_lenght': '8',
         'default_timbre': 'WangMusicBox,0',
         'note_trigger_mode': 'Pizzicato',
-        'transpose': '-7',
+        'transpose': '0',
         'range': '60,62,64,65,67,69,71,72,74,76,77,79,81,83,84,86,88,89,91,93',
     },
     'Instrument_Preset_PaperStripMusicBox_15Note': {
@@ -122,8 +203,8 @@ instrument_presets: dict[str, dict[str, str]] = {
         'quarter_note_unit_lenght': '8',
         'default_timbre': 'WangMusicBox,0',
         'note_trigger_mode': 'Pizzicato',
-        'transpose': '-4',
-        'range': '72,74,76,77,79,81,83,84,86,88,89,91,93,95,96',
+        'transpose': '8',
+        'range': '60,62,64,65,67,69,71,72,74,76,77,79,81,83,84',
     },
 }
 
@@ -215,19 +296,24 @@ class FmpFile:
     You should not initialize an FmpFile instance directly.
     Use `FmpFile.new(...)` to create one.
     """
-    version: tuple[int, int, int] = (3, 0, 0)
-    compatible_version: tuple[int, int, int] = (0, 0, 0)
+    file_format = 1
+    version: tuple[int, int, int] = (3, 1, 0)
+    compatible_version: tuple[int, int, int] = (3, 1, 0)
     tempo: int = 500000
     time_signature: TimeSignature = TimeSignature(4, 4)
+    scale: int = 100000
     ticks_per_beat: int = FMP_DEFAULT_TICKS_PER_BEAT
     instrument: str = 'Instrument_Preset_PaperStripMusicBox_30Note'
-    show_info_on_open: bool = False
-    title: str = ''
-    subtitle: str = ''
-    comment: str = ''
+    note: str | None = None
+    '''`' [ **** This file created by FairyMusicBox - www.fairymusicbox.com **** ] '`by default'''
+    show_info_on_open: bool | None = None
+    title: str | None = None
+    subtitle: str | None = None
+    comment: str | None = None
     tracks: list[FmpTrack] = field(default_factory=list)
     time_marks: list[FmpTimeMark] = field(default_factory=list)
     channels: list[FmpChannel] = field(default_factory=list)
+    ignore_issues: str | None = ''
     instrument_cfg: dict[str, str] | None = None
     dgprogram_cfg: dict[str, Any] | None = None
     dgstyle_cfg: dict[str, str] | None = None
@@ -305,7 +391,7 @@ class FmpFile:
 
         # 头部数据
         assert file.read(3) == b'FMP'
-        assert file.read(2) == bytes(2)
+        fmp_file.file_format = read_int(file, 2)
 
         fmp_file.version = (read_int(file, 2, signed=True),
                             read_int(file, 2, signed=True),
@@ -321,7 +407,7 @@ class FmpFile:
         numerator: int = read_int(file, 2)
         denominator: int = read_int(file, 2)
         fmp_file.time_signature = TimeSignature(numerator, denominator)
-
+        fmp_file.scale = read_int(file, 4)
         fmp_file.ticks_per_beat = read_int(file, 2)
 
         assert file.read(4) == bytes(4)
@@ -332,24 +418,27 @@ class FmpFile:
         assert file.read(4) == b'\x03\x00\x00\x00'
 
         # 工程信息
-        num: int = read_int(file, 4) - 1
-        assert file.read(4) == b'\x03\x01\x00\x00'
-        assert file.read(3) == b'sio'
-        fmp_file.show_info_on_open = read_bool(file)
+        num: int = read_int(file, 4)
         for _ in range(num):
             type_length: int = read_int(file, 1)
-            info_length: int = read_int(file, 3) - 1
+            info_length: int = read_int(file, 3)
             info_type: str = file.read(type_length).decode()
             match info_type:
+                case 'note':
+                    fmp_file.note = file.read(info_length).decode()
+                case 'sio':
+                    fmp_file.show_info_on_open = read_bool(file)
                 case 'ti':
-                    fmp_file.title = file.read(info_length).decode()
+                    fmp_file.title = file.read(info_length - 1).decode()
+                    assert file.read(1) == bytes(1)
                 case 'sti':
-                    fmp_file.subtitle = file.read(info_length).decode()
+                    fmp_file.subtitle = file.read(info_length - 1).decode()
+                    assert file.read(1) == bytes(1)
                 case 'cmt':
-                    fmp_file.comment = file.read(info_length).decode()
+                    fmp_file.comment = file.read(info_length - 1).decode()
+                    assert file.read(1) == bytes(1)
                 case _:
                     raise ValueError
-            assert file.read(1) == bytes(1)
 
         # 轨道
         assert file.read(3) == b'TRK'
@@ -415,7 +504,7 @@ class FmpFile:
                     time_mark.comment = file.read(comment_length).decode()
                 case 3:  # 结束标记
                     time_mark = FmpEndMark()
-                    assert file.read(3) == b'\x04\x00'
+                    assert file.read(2) == b'\x04\x00'
                     time_mark.tick = read_int(file, 4)
                 case _:
                     raise ValueError
@@ -425,7 +514,11 @@ class FmpFile:
         assert file.read(3) == b'CNL'
         _: int = read_int(file, 4)
         channel_count: int = read_int(file, 4)
-        for _ in range(channel_count):
+        for i in range(channel_count):
+            # if i == 0:
+            #     channel = FmpMasterChannel()
+            # else:
+            #     channel = FmpNormalChannel()
             channel = FmpChannel()
             soundfont_name_length_add_22: int = read_int(file, 4)
             assert file.read(2) == bytes(2)
@@ -439,56 +532,79 @@ class FmpFile:
             channel.soundfont_name = file.read(soundfont_name_length).decode()
             channel.soundfont_index = read_int(file, 4)
             num: int = read_int(file, 4)
-            for _ in range(num):
-                key_length: int = read_int(file, 1)
-                value_length: int = read_int(file, 3)
-                key: str = file.read(key_length).decode()
-                match key:
-                    case 'effect.reverb.mix':
-                        assert value_length == 2
-                        channel.reverb_mix = read_int(file, value_length)
-                    case 'effect.reverb.room':
-                        assert value_length == 2
-                        channel.reverb_room = read_int(file, value_length)
-                    case 'effect.reverb.damping':
-                        assert value_length == 2
-                        channel.reverb_damping = read_int(file, value_length)
-                    case 'effect.reverb.width':
-                        assert value_length == 2
-                        channel.reverb_width = read_int(file, value_length)
-                    case 'pg':
-                        assert value_length == 1
-                        channel.participate_generate = read_bool(file)
-                    case 'tp':
-                        assert value_length == 4
-                        channel.transposition = read_int(file, value_length)
-                    case 'ntm':
-                        assert value_length == 1
-                        channel.note_trigger_mode = read_int(file, value_length)
-                    case 'ir':
-                        assert value_length == 1
-                        channel.inherit = read_bool(file)
-                    case 'rg':
-                        channel.range = [read_int(file, 1) for _ in range(value_length)]
+            # assert num == 0 or isinstance(channel, FmpNormalChannel)
+            # if isinstance(channel, FmpNormalChannel):
+            if True:
+                for _ in range(num):
+                    key_length: int = read_int(file, 1)
+                    value_length: int = read_int(file, 3)
+                    key: str = file.read(key_length).decode()
+                    match key:
+                        case 'pg':
+                            assert value_length == 1
+                            channel.participate_generate = read_bool(file)
+                        case 'tp':
+                            assert value_length == 4
+                            channel.transposition = read_int(file, value_length)
+                        case 'ntm':
+                            assert value_length == 1
+                            channel.note_trigger_mode = read_int(file, value_length)
+                        case 'ir':
+                            assert value_length == 1
+                            channel.inherit = read_bool(file)
+                        case 'rg':
+                            channel.range = [read_int(file, 1) for _ in range(value_length)]
+                        case _:
+                            raise ValueError
+
+            _ = read_int(file, 4)
+            effector_num = read_int(file, 4)
+            for _ in range(effector_num):
+                effector_name_length = read_int(file, 2)
+                effector_name = file.read(effector_name_length).decode()
+                match effector_name:
+                    case 'Effect_Reverb':
+                        effector = FmpReverbEffector()
+                        value_class = FmpReverbEffectorValue
+                    case 'Effect_Equalizer':
+                        effector = FmpEqualizerEffector()
+                        value_class = FmpEqualizerEffectorValue
+                    case 'Effect_Compressor':
+                        effector = FmpCompressorEffector()
+                        value_class = FmpCompressorEffectorValue
+                    case 'Effect_Limiter':
+                        effector = FmpLimiterEffector()
+                        value_class = FmpLimiterEffectorValue
                     case _:
                         raise ValueError
-            assert file.read(4) == b'\x04\x00\x00\x00'
+                effector.enabled = read_bool(file)
+                effector.mix_level = read_float(file, 4)
+                num = read_int(file, 4)
+                effect_values_str = file.read(num).decode()
+                effector.effect_values = value_class.model_validate_json(effect_values_str)
+                channel.effectors.append(effector)
 
             fmp_file.channels.append(channel)
 
         num: int = read_int(file, 4)
         for _ in range(num):
             key_length: int = read_int(file, 1)
-            value_length: int = read_int(file, 3) - 1
+            value_length: int = read_int(file, 3)
             key: str = file.read(key_length).decode()
             match key:
+                case 'ignore_issues':
+                    fmp_file.ignore_issues = file.read(value_length).decode()
                 case 'instrument_cfg':
-                    fmp_file.instrument_cfg = json.loads(file.read(value_length).decode().replace('\n', '\\n'))
+                    fmp_file.instrument_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    assert file.read(1) == bytes(1)
                 case 'dgprogram_cfg':
-                    fmp_file.dgprogram_cfg = json.loads(file.read(value_length).decode().replace('\n', '\\n'))
+                    fmp_file.dgprogram_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    assert file.read(1) == bytes(1)
                 case 'dgstyle_cfg':
-                    fmp_file.dgstyle_cfg = json.loads(file.read(value_length).decode().replace('\n', '\\n'))
-            assert file.read(1) == bytes(1)
+                    fmp_file.dgstyle_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    assert file.read(1) == bytes(1)
+                case _:
+                    raise ValueError
         assert not file.read()
 
         return fmp_file
@@ -513,42 +629,49 @@ class FmpFile:
 
     def _save_to_file(self, file: BinaryIO) -> None:
         file.write(b'FMP')
-        file.write(bytes(2))
+        write_int(file, self.file_format, 2)
         for version_part in self.version:
             write_int(file, version_part, 2)
         for compatible_version_part in self.compatible_version:
             write_int(file, compatible_version_part, 2)
 
-        write_int(file, len(self.instrument.encode()) + 28, 4)
-        file.write(bytes(4))
-        write_int(file, self.tempo, 4)
-        write_int(file, self.time_signature.numerator, 2)
-        write_int(file, self.time_signature.denominator, 2)
-        write_int(file, self.ticks_per_beat, 2)
-        file.write(bytes(4))
-        write_int(file, len(self.instrument.encode()), 2)
-        file.write(self.instrument.encode())
-        file.write(b'\x03\x00\x00\x00')
+        with LengthWriter(file, 0, 4):
+            file.write(bytes(4))
+            write_int(file, self.tempo, 4)
+            write_int(file, self.time_signature.numerator, 2)
+            write_int(file, self.time_signature.denominator, 2)
+            write_int(file, self.scale, 4)
+            write_int(file, self.ticks_per_beat, 2)
+            file.write(bytes(4))
+            write_int(file, len(self.instrument.encode()), 2)
+            file.write(self.instrument.encode())
+            file.write(b'\x03\x00\x00\x00')
 
-        num: int = 1 + bool(self.title) + bool(self.subtitle) + bool(self.comment)
+        num: int = (self.note is not None) + (self.show_info_on_open is not None) + (self.title is not None) + (self.subtitle is not None) + (self.comment is not None)
         write_int(file, num, 4)
-        write_int(file, 3, 1)
-        write_int(file, 1, 3)
-        file.write(b'sio')
-        write_bool(file, self.show_info_on_open)
-        if self.title:
+        if self.note is not None:
+            write_int(file, 4, 1)
+            write_int(file, len(self.note.encode()), 3)
+            file.write(b'note')
+            file.write(self.note.encode())
+        if self.show_info_on_open is not None:
+            write_int(file, 3, 1)
+            write_int(file, 1, 3)
+            file.write(b'sio')
+            write_bool(file, self.show_info_on_open)
+        if self.title is not None:
             write_int(file, 2, 1)
             write_int(file, len(self.title.encode()) + 1, 3)
             file.write(b'ti')
             file.write(self.title.encode())
             file.write(bytes(1))
-        if self.subtitle:
+        if self.subtitle is not None:
             write_int(file, 3, 1)
             write_int(file, len(self.subtitle.encode()) + 1, 3)
             file.write(b'sti')
             file.write(self.subtitle.encode())
             file.write(bytes(1))
-        if self.comment:
+        if self.comment is not None:
             write_int(file, 3, 1)
             write_int(file, len(self.comment.encode()) + 1, 3)
             file.write(b'cmt')
@@ -556,134 +679,123 @@ class FmpFile:
             file.write(bytes(1))
 
         file.write(b'TRK')
-        write_int(file, sum(len(track.notes) * 12 + len(track.name) + 40 for track in self.tracks) + 8, 4)
-        write_int(file, len(self.tracks), 4)
-        for track in self.tracks:
-            file.write(b'\x01')
-            write_int(file, len(track.notes) * 12 + len(track.name) + 39, 4)
-            write_int(file, len(track.name.encode()) + 19, 4)
-            write_int(file, len(track.name.encode()), 2)
-            file.write(track.name.encode())
-            write_int(file, track.channel, 4)
-            write_int(file, track.index, 4)
-            write_int(file, track.color, 4)
-            write_bool(file, track.muted)
-            file.write(bytes(4))
-            write_int(file, len(track.notes) * 12 + 12, 4)
-            write_int(file, len(track.notes), 4)
-            file.write(b'\x01\x00\x01\x0A')
-            for note in track.notes:
-                file.write(b'\x10\x00')
-                write_int(file, note.tick, 4)
-                write_int(file, note.pitch, 1)
-                write_int(file, note.duration, 4)
-                write_int(file, note.velocity, 1)
+        with LengthWriter(file, 0, 4):
+            write_int(file, len(self.tracks), 4)
+            for track in self.tracks:
+                file.write(b'\x01')
+                write_int(file, len(track.notes) * 12 + len(track.name) + 39, 4)
+                write_int(file, len(track.name.encode()) + 19, 4)
+                write_int(file, len(track.name.encode()), 2)
+                file.write(track.name.encode())
+                write_int(file, track.channel, 4)
+                write_int(file, track.index, 4)
+                write_int(file, track.color, 4)
+                write_bool(file, track.muted)
+                file.write(bytes(4))
+                write_int(file, len(track.notes) * 12 + 12, 4)
+                write_int(file, len(track.notes), 4)
+                file.write(b'\x01\x00\x01\x0A')
+                for note in track.notes:
+                    file.write(b'\x10\x00')
+                    write_int(file, note.tick, 4)
+                    write_int(file, note.pitch, 1)
+                    write_int(file, note.duration, 4)
+                    write_int(file, note.velocity, 1)
 
         file.write(b'TMK')
-        length: int = 8
-        for time_mark in self.time_marks:
-            if isinstance(time_mark, FmpBpmTimeSignatureMark):
-                length += 17
-            elif isinstance(time_mark, FmpCommentMark):
-                length += 9 + len(time_mark.comment.encode())
-            elif isinstance(time_mark, FmpEndMark):
-                length += 7
-            else:
-                raise TypeError
-        write_int(file, length, 4)
-        write_int(file, len(self.time_marks), 4)
-        for time_mark in self.time_marks:
-            if isinstance(time_mark, FmpBpmTimeSignatureMark):
-                write_int(file, 1, 1)
-                write_int(file, 14, 2)
-                write_int(file, time_mark.tick, 4)
-                write_bool(file, time_mark.change_tempo)
-                write_int(file, time_mark.tempo, 4)
-                write_bool(file, time_mark.change_time_signature)
-                write_int(file, time_mark.time_signature.numerator, 2)
-                write_int(file, time_mark.time_signature.denominator, 2)
-            elif isinstance(time_mark, FmpCommentMark):
-                write_int(file, 2, 1)
-                write_int(file, len(time_mark.comment.encode()) + 6, 2)
-                write_int(file, time_mark.tick, 4)
-                write_int(file, len(time_mark.comment.encode()), 2)
-                file.write(time_mark.comment.encode())
-            elif isinstance(time_mark, FmpEndMark):
-                write_int(file, 3, 1)
-                write_int(file, 4, 2)
-                write_int(file, time_mark.tick, 4)
-            else:
-                raise TypeError
+        with LengthWriter(file, 0, 4):
+            write_int(file, len(self.time_marks), 4)
+            for time_mark in self.time_marks:
+                if isinstance(time_mark, FmpBpmTimeSignatureMark):
+                    write_int(file, 1, 1)
+                    write_int(file, 14, 2)
+                    write_int(file, time_mark.tick, 4)
+                    write_bool(file, time_mark.change_tempo)
+                    write_int(file, time_mark.tempo, 4)
+                    write_bool(file, time_mark.change_time_signature)
+                    write_int(file, time_mark.time_signature.numerator, 2)
+                    write_int(file, time_mark.time_signature.denominator, 2)
+                elif isinstance(time_mark, FmpCommentMark):
+                    write_int(file, 2, 1)
+                    write_int(file, len(time_mark.comment.encode()) + 6, 2)
+                    write_int(file, time_mark.tick, 4)
+                    write_int(file, len(time_mark.comment.encode()), 2)
+                    file.write(time_mark.comment.encode())
+                elif isinstance(time_mark, FmpEndMark):
+                    write_int(file, 3, 1)
+                    write_int(file, 4, 2)
+                    write_int(file, time_mark.tick, 4)
+                else:
+                    raise TypeError
 
         file.write(b'CNL')
-        pointer: int = file.tell()
-        file.seek(4, 1)
-        write_int(file, len(self.channels), 4)
-        for channel in self.channels:
-            # # 我实在是不知道为什么 soundfont_name == 'WangMusicBox' 的时候会报“通道元信息读取失败”，汪汪怎么你了
-            # if channel.soundfont_name == 'WangMusicBox':
-            #     soundfont_name = ''
-            # else:
-            #     soundfont_name = channel.soundfont_name
-            write_int(file, len(channel.soundfont_name.encode()) + 22, 4)
-            # write_int(file, len(soundfont_name.encode()) + 22, 4)
-            file.write(bytes(2))
-            write_int(file, channel.index, 4)
-            write_int(file, channel.volume, 2)
-            write_int(file, channel.pan, 2)
-            write_bool(file, channel.solo)
-            write_bool(file, channel.muted)
-            write_int(file, len(channel.soundfont_name.encode()), 2)
-            # write_int(file, len(soundfont_name.encode()), 2)
-            file.write(channel.soundfont_name.encode())
-            # file.write(soundfont_name.encode())
-            write_int(file, channel.soundfont_index, 4)
-            write_int(file, 9 if channel.reverb_mix > 0 else 5, 4)
-            if channel.reverb_mix > 0:
-                write_int(file, 17, 1)
-                write_int(file, 2, 3)
-                file.write(b'effect.reverb.mix')
-                write_int(file, channel.reverb_mix, 2)
-                write_int(file, 18, 1)
-                write_int(file, 2, 3)
-                file.write(b'effect.reverb.room')
-                write_int(file, channel.reverb_room, 2)
-                write_int(file, 21, 1)
-                write_int(file, 2, 3)
-                file.write(b'effect.reverb.damping')
-                write_int(file, channel.reverb_damping, 2)
-                write_int(file, 19, 1)
-                write_int(file, 2, 3)
-                file.write(b'effect.reverb.width')
-                write_int(file, channel.reverb_width, 2)
-            write_int(file, 2, 1)
-            write_int(file, 1, 3)
-            file.write(b'pg')
-            write_bool(file, channel.participate_generate)
-            write_int(file, 2, 1)
-            write_int(file, 4, 3)
-            file.write(b'tp')
-            write_int(file, channel.transposition, 4)
-            write_int(file, 3, 1)
-            write_int(file, 1, 3)
-            file.write(b'ntm')
-            write_int(file, channel.note_trigger_mode, 1)
-            write_int(file, 2, 1)
-            write_int(file, 1, 3)
-            file.write(b'ir')
-            write_bool(file, channel.inherit)
-            write_int(file, 2, 1)
-            write_int(file, len(channel.range), 3)
-            file.write(b'rg')
-            file.write(bytes(channel.range))
-            file.write(b'\x04\x00\x00\x00')
-        current_pointer: int = file.tell()
-        file.seek(pointer)
-        write_int(file, current_pointer - pointer, 4)
-        file.seek(current_pointer)
+        with LengthWriter(file, 0, 4):
+            write_int(file, len(self.channels), 4)
+            for channel in self.channels:
+                # # 我实在是不知道为什么 soundfont_name == 'WangMusicBox' 的时候会报“通道元信息读取失败”，汪汪怎么你了
+                # if channel.soundfont_name == 'WangMusicBox':
+                #     soundfont_name = ''
+                # else:
+                #     soundfont_name = channel.soundfont_name
+                with LengthWriter(file, 0, 4):
+                    file.write(bytes(2))
+                    write_int(file, channel.index, 4)
+                    write_int(file, channel.volume, 2)
+                    write_int(file, channel.pan, 2)
+                    write_bool(file, channel.solo)
+                    write_bool(file, channel.muted)
+                    write_int(file, len(channel.soundfont_name.encode()), 2)
+                    # write_int(file, len(soundfont_name.encode()), 2)
+                    file.write(channel.soundfont_name.encode())
+                    # file.write(soundfont_name.encode())
+                    write_int(file, channel.soundfont_index, 4)
 
-        num = (self.instrument_cfg is not None) + (self.dgprogram_cfg is not None) + (self.dgstyle_cfg is not None)
+                num = (channel.participate_generate is not None) + (channel.transposition is not None) + (channel.note_trigger_mode is not None) + (channel.inherit is not None) + (channel.range is not None)
+                write_int(file, num, 4)
+                if channel.participate_generate is not None:
+                    write_int(file, 2, 1)
+                    write_int(file, 1, 3)
+                    file.write(b'pg')
+                    write_bool(file, channel.participate_generate)
+                if channel.transposition is not None:
+                    write_int(file, 2, 1)
+                    write_int(file, 4, 3)
+                    file.write(b'tp')
+                    write_int(file, channel.transposition, 4)
+                if channel.note_trigger_mode is not None:
+                    write_int(file, 3, 1)
+                    write_int(file, 1, 3)
+                    file.write(b'ntm')
+                    write_int(file, channel.note_trigger_mode, 1)
+                if channel.inherit is not None:
+                    write_int(file, 2, 1)
+                    write_int(file, 1, 3)
+                    file.write(b'ir')
+                    write_bool(file, channel.inherit)
+                if channel.range is not None:
+                    write_int(file, 2, 1)
+                    write_int(file, len(channel.range), 3)
+                    file.write(b'rg')
+                    file.write(bytes(channel.range))
+
+                with LengthWriter(file, 0, 4):
+                    write_int(file, len(channel.effectors), 4)
+                    for effector in channel.effectors:
+                        write_int(file, len(effector.effector_name.encode()), 2)
+                        file.write(effector.effector_name.encode())
+                        write_bool(file, effector.enabled)
+                        write_float(file, effector.mix_level, 4)
+                        bytes_data = json.dumps(effector.effect_values.model_dump(), separators=(',', ': ')).encode()
+                        write_int(file, len(bytes_data), 4)
+                        file.write(bytes_data)
+
+        num = (self.ignore_issues is not None) + (self.instrument_cfg is not None) + (self.dgprogram_cfg is not None) + (self.dgstyle_cfg is not None)
         write_int(file, num, 4)
+        if self.ignore_issues is not None:
+            write_int(file, 13, 1)
+            write_int(file, len(self.ignore_issues.encode()), 3)
+            file.write(b'ignore_issues')
+            file.write(self.ignore_issues.encode())
         if self.instrument_cfg is not None:
             write_int(file, 14, 1)
             bytes_data: bytes = json.dumps(self.instrument_cfg, ensure_ascii=False, separators=(',', ': ')).encode()
@@ -699,12 +811,17 @@ class FmpFile:
             file.write(bytes_data)
             file.write(bytes(1))
         if self.dgstyle_cfg is not None:
-            write_int(file, 13, 1)
+            write_int(file, 11, 1)
             bytes_data: bytes = json.dumps(self.dgstyle_cfg, ensure_ascii=False, separators=(',', ': ')).encode()
             write_int(file, len(bytes_data) + 1, 3)
             file.write(b'dgstyle_cfg')
             file.write(bytes_data)
             file.write(bytes(1))
+
+    def to_bytes(self) -> bytes:
+        with BytesIO() as bytes_io:
+            self._save_to_file(bytes_io)
+            return bytes_io.getvalue()
 
     def import_midi(self,
                     midi_file: MidiFile,
@@ -917,6 +1034,12 @@ def read_bool(file: BinaryIO, /) -> bool:
     return bool(i)
 
 
+def read_float(file: BinaryIO, /, byte: Literal[2, 4, 8] = 4, byteorder: Literal['big', 'little'] = 'little') -> float:
+    byteorder_flag = {'big': '>', 'little': '<'}[byteorder]
+    format_character = {2: 'e', 4: 'f', 8: 'd'}[byte]
+    return struct.unpack(f'{byteorder_flag}{format_character}', file.read(byte))[0]
+
+
 def write_int(file: BinaryIO,
               /,
               value: int,
@@ -930,3 +1053,30 @@ def write_bool(file: BinaryIO,
                /,
                value: bool) -> None:
     file.write(value.to_bytes())
+
+
+def write_float(file: BinaryIO,
+                /,
+                value: float,
+                byte: Literal[2, 4, 8] = 4,
+                byteorder: Literal['big', 'little'] = 'little') -> None:
+    byteorder_flag = {'big': '>', 'little': '<'}[byteorder]
+    format_character = {2: 'e', 4: 'f', 8: 'd'}[byte]
+    file.write(struct.pack(f'{byteorder_flag}{format_character}', value))
+
+
+class LengthWriter:
+    def __init__(self, file: BinaryIO, offset: int = 0, byte: int = 4) -> None:
+        self.file: BinaryIO = file
+        self.offset: int = offset
+        self.byte: int = byte
+
+    def __enter__(self) -> None:
+        self.pointer: int = self.file.tell()
+        self.file.seek(self.byte, 1)
+
+    def __exit__(self, *args) -> None:
+        current_pointer: int = self.file.tell()
+        self.file.seek(self.pointer)
+        write_int(self.file, current_pointer - self.pointer - self.offset, self.byte)
+        self.file.seek(current_pointer)
