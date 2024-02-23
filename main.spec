@@ -2,7 +2,17 @@
 import shutil
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zipfile import ZIP_DEFLATED, ZipFile
+
+if TYPE_CHECKING:
+    from typing import cast
+
+    from PyInstaller.building.api import COLLECT, EXE, PYZ
+    from PyInstaller.building.build_main import Analysis
+    from PyInstaller.config import CONF
+    DISTPATH = cast(str, CONF['distpath'])
+
 
 a = Analysis(
     ['main.py'],
@@ -65,4 +75,4 @@ shutil.copy('README.md', dest_path)
 shutil.copy('draft_settings.yml', dest_path)
 shutil.copy('fonts/SourceHanSans.otf', dest_path / 'fonts')
 zip_directory(Path(DISTPATH) / 'main',
-              Path(DISTPATH) / f'Music Box Designer_{time.strftime('%Y-%m-%d', time.localtime())}.zip')
+              Path(DISTPATH) / f'Music-Box-Designer-{time.strftime('%Y-%m-%d', time.localtime())}.zip')
