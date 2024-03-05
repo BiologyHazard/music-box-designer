@@ -10,11 +10,13 @@ from typing import Any, Literal, Self, overload
 
 import mido
 import yaml
+from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 from PIL import Image, ImageColor, ImageDraw, ImageFont
-from mido import MidiFile
-from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, PositiveInt, field_serializer, field_validator
+from pydantic import (BaseModel, ConfigDict, FilePath, FiniteFloat, NonNegativeFloat,
+                      PositiveInt, field_serializer, field_validator)
 from pydantic_extra_types.color import Color
 
+from .consts import DEFAULT_DURATION, MIDI_DEFAULT_TICKS_PER_BEAT
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
 from .fmp import FmpFile, InstrumentConfig
 from .log import logger
@@ -32,7 +34,8 @@ class Note:
     '''节拍数'''
 
 
-class DraftSettings(BaseModel, arbitrary_types_allowed=True):
+class DraftSettings(BaseModel):
+    model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
     # 页面设置
     anti_alias: Literal['off', 'fast', 'accurate'] = 'fast'
     '''抗锯齿等级（仅对音符生效），可选值`'off', 'fast', 'accurate'`'''
@@ -189,7 +192,7 @@ class ImageList(list[Image.Image]):
     title: str
     paper_size: tuple[float, float]
 
-    def save(self, file_name: str | None = None, format: str | None = None, overwrite: bool = False) -> None:
+    def save(self, file_name: str | Path | None = None, format: str | None = None, overwrite: bool = False) -> None:
         """
         保存图片或 PDF 文档到文件，文件格式由参数 `file_name` 推断，也可以用参数 `format` 指定。
 
@@ -200,6 +203,7 @@ class ImageList(list[Image.Image]):
         - `format`: 保存文件的格式，可以是 `'PDF'`，或一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
+        # TODO: What if self doesn't have attribute 'file_name'?
         if format is None and file_name is not None:
             format = Path(file_name).suffix.lstrip('.').upper()
         if format is not None and format.upper() == 'PDF':
@@ -207,7 +211,7 @@ class ImageList(list[Image.Image]):
         else:
             return self.save_image(file_name, format, overwrite)
 
-    def save_image(self, file_name: str | None = None, format: str | None = None, overwrite: bool = False) -> None:
+    def save_image(self, file_name: str | Path | None = None, format: str | None = None, overwrite: bool = False) -> None:
         """
         保存图片到文件，文件格式由参数 `file_name` 推断。
 
@@ -216,14 +220,17 @@ class ImageList(list[Image.Image]):
         - `format`: 保存文件的格式，可以是一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
+        # TODO: What if self doesn't have attribute 'file_name'?
         if file_name is None:
             file_name = f'{self.file_name}_{{}}.png'
+        if isinstance(file_name, Path):
+            file_name = file_name.as_posix()
         for i, image in enumerate(self):
             path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite=overwrite)
             logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()}...')
             image.save(path_to_save, format=format)
 
-    def save_pdf(self, file_name: str | None = None, overwrite: bool = True) -> None:
+    def save_pdf(self, file_name: str | Path | None = None, overwrite: bool = True) -> None:
         """
         由图片生成 PDF 文档，并保存到文件。
 
@@ -232,7 +239,7 @@ class ImageList(list[Image.Image]):
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
         from reportlab.lib.units import mm
-        from reportlab.pdfgen import canvas
+        from reportlab.pdfgen.canvas import Canvas
 
         if file_name is None:
             file_name = f'{self.file_name}.pdf'
@@ -241,18 +248,18 @@ class ImageList(list[Image.Image]):
         path_to_save: Path = find_available_filename(file_name, overwrite=overwrite)
         width, height = self.paper_size
         pdf_page_size: tuple[float, float] = (width * mm, height * mm)
-        c = canvas.Canvas(path_to_save.as_posix(), pagesize=pdf_page_size)
-        c.setAuthor('BioHazard')
-        c.setTitle(getattr(self, 'title', 'Music Box'))
-        c.setSubject('Music Box')
-        c.setKeywords(('Music Box', 'Music Box Designer'))
-        c.setCreator('Music Box Designer')
+        canvas = Canvas(path_to_save.as_posix(), pagesize=pdf_page_size)
+        canvas.setAuthor('BioHazard')
+        canvas.setTitle(getattr(self, 'title', 'Music Box'))
+        canvas.setSubject('Music Box')
+        canvas.setKeywords(('Music Box', 'Music Box Designer'))
+        canvas.setCreator('Music Box Designer')
         # c.setProducer('Music Box Designer')
         for image in self:
-            c.drawInlineImage(image, 0, 0, *pdf_page_size)
-            c.showPage()
+            canvas.drawInlineImage(image, 0, 0, *pdf_page_size)
+            canvas.showPage()
         logger.info(f'Saving PDF to {path_to_save.as_posix()}...')
-        c.save()
+        canvas.save()
 
 
 @dataclass
@@ -262,6 +269,7 @@ class Draft:
     title: str = ''
     subtitle: str = ''
     music_info: str = ''
+    """显示在栏右上角的名称"""
     file_path: Path | None = None
     bpm: float | None = None
     time_signature: tuple[int, int] | None = None
@@ -277,11 +285,12 @@ class Draft:
                        skip_near_notes: bool = True,
                        bpm: float | None = None,
                        ) -> Self:
-        logger.info(f'Loading from {file_path!r}...')
         try:
             file_path = Path(file_path)
         except TypeError:
             raise TypeError(f"Parameter 'file' must be a path-like object, but got {type(file_path)}.")
+
+        logger.info(f'Loading from {file_path.as_posix()!r}...')
         match file_path.suffix:
             case '.emid':
                 return cls.load_from_emid(EmidFile.load_from_file(file_path),
@@ -374,18 +383,21 @@ class Draft:
                 length_mm_per_beat=length_mm_per_beat,
             )
         self.preset = preset
-        self.title = self.music_info = fmp_file.title
-        self.subtitle = fmp_file.subtitle
+        if fmp_file.title is not None:
+            self.title = self.music_info = fmp_file.title
+        if fmp_file.subtitle is not None:
+            self.subtitle = fmp_file.subtitle
         self.file_path = fmp_file.file_path
         self.bpm = bpm if bpm is not None else mido.tempo2bpm(fmp_file.tempo)
         self.time_signature = fmp_file.time_signature
 
+        scale: float = fmp_file.scale / 100000
         for track in fmp_file.tracks:
             for note in track.notes:
                 if note.velocity == 0:
                     continue
                 self.notes.append(Note(pitch=note.pitch + transposition,
-                                       time=note.tick / fmp_file.ticks_per_beat))
+                                       time=note.tick / fmp_file.ticks_per_beat * scale))
 
         self.remove_out_of_range_notes()
         if remove_blank:
@@ -401,7 +413,9 @@ class Draft:
                        transposition: int = 0,
                        remove_blank: bool = True,
                        skip_near_notes: bool = True,
-                       bpm: float | None = None) -> Self:
+                       bpm: float | None = None,
+                       scale: float = 1,
+                       ) -> Self:
         self: Self = cls()
         if preset is not None:
             self.preset = preset
@@ -444,6 +458,7 @@ class Draft:
 
         self.notes.sort(key=lambda note: note.time)
         self.remove_out_of_range_notes()
+        self.apply_scale(scale)
         if remove_blank:
             self.remove_blank()
         if skip_near_notes:
@@ -458,6 +473,11 @@ class Draft:
                 continue
             new_notes.append(note)
         self.notes = new_notes
+
+    def apply_scale(self, scale: float = 1) -> None:
+        if scale == 1:
+            return
+        self.notes = [Note(note.pitch, note.time * scale) for note in self.notes]
 
     def remove_blank(self) -> None:
         if not self.notes:
@@ -479,6 +499,43 @@ class Draft:
             new_notes.append(note)
             latest_time[note.pitch] = note.time
         self.notes = new_notes
+
+    def export_midi(self,
+                    *,
+                    transposition: int = 0,
+                    ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT,
+                    ) -> MidiFile:
+        midi_file = MidiFile(charset='gbk')
+        midi_file.ticks_per_beat = ticks_per_beat
+
+        if self.bpm is not None:
+            tempo_track = MidiTrack()
+            tempo_track.append(MetaMessage(type='set_tempo', tempo=bpm2tempo(self.bpm), time=0))
+            midi_file.tracks.append(tempo_track)
+
+        midi_track = MidiTrack()
+        midi_track.append(Message(type='program_change', program=10, time=0))
+        for note in sorted(self.notes, key=lambda note: note.time):
+            if note.pitch + transposition not in range(128):
+                continue
+
+            midi_track.append(Message(
+                type='note_on',
+                note=note.pitch + transposition,
+                time=round(note.time * ticks_per_beat)
+            ))
+            midi_track.append(Message(
+                type='note_off',
+                note=note.pitch + transposition,
+                time=round((note.time + DEFAULT_DURATION) * ticks_per_beat)
+            ))
+        midi_track.sort(key=lambda message: message.time)
+        midi_file.tracks.append(MidiTrack(mido.midifiles.tracks._to_reltime(midi_track)))
+
+        for midi_track in midi_file.tracks:
+            midi_track.append(MetaMessage(type='end_of_track', time=0))
+
+        return midi_file
 
     def export_pics(self,
                     settings: DraftSettings | None = None,
@@ -617,7 +674,7 @@ class Draft:
             custom_watermark_font: ImageFont.FreeTypeFont = ImageFont.truetype(
                 str(settings.font_path), round(mm_to_pixel(settings.custom_watermark_size, settings.ppi)))
 
-            for row in range(0, rows, 10):
+            for row in range(5, rows, 10):
                 col: int = math.floor((row - first_col_rows + rows_per_col) / rows_per_col)
                 page: int = col // cols_per_page
                 col_in_page: int = col % cols_per_page
@@ -754,7 +811,7 @@ class Draft:
                         current_col_top_y = first_row_y
                         current_col_rows = rows_per_col
                     current_col_bottom_y: float = (
-                        current_col_top_y + current_col_rows * self.preset.length_mm_per_beat)
+                            current_col_top_y + current_col_rows * self.preset.length_mm_per_beat)
                     draw.text(
                         pos_mm_to_pixel((first_col_x + col_in_page * self.preset.col_width + self.preset.left_border,
                                          current_col_bottom_y),
@@ -895,8 +952,8 @@ class Draft:
                                  (note.time * scale - first_col_rows + rows_per_col) % rows_per_col)
             xy: tuple[int, int] = pos_mm_to_pixel(
                 (first_col_x + col_in_page * self.preset.col_width
-                    + self.preset.left_border + index * self.preset.grid_width,
-                    current_col_y + row_in_col * self.preset.length_mm_per_beat),
+                 + self.preset.left_border + index * self.preset.grid_width,
+                 current_col_y + row_in_col * self.preset.length_mm_per_beat),
                 settings.ppi,
                 'floor',
             )
