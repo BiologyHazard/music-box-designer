@@ -60,7 +60,7 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是矢量图，可以无限放大而
 
 ### 方法 1. 由可执行文件直接运行（仅 Windows 系统）
 
-点击 [Latest Release](https://github.com/BiologyHazard/MusicBoxDesigner/releases/latest)，在页面下方的 Assets 中下载 main-\<version>.zip，并解压。
+点击 [Latest Release](https://github.com/BiologyHazard/MusicBoxDesigner/releases/latest)，在页面下方的 Assets 中下载 Music-Box-Designer-\<version>.zip，并解压。
 
 （但是不能直接双击运行，因为你还没告诉程序要干什么，接着往下看吧）
 
@@ -118,11 +118,11 @@ FairyMusicBox 3.0.0 生成的纸带设计稿是矢量图，可以无限放大而
 python main.py --help
 ```
 
-> 如果下载的是可执行文件例如 main-1.0.0.exe，则命令应当是
+> 如果下载的是可执行文件例如 Music-Box-Designer-1.0.0.exe，则命令应当是
 > ```bash
-> .\main-1.0.0.exe --help
+> .\Music-Box-Designer-1.0.0.exe --help
 > ```
-> 请将 "main-1.0.0.exe" 替换为实际的文件名，在接下来的命令中，都请自行把 `python main.py` 替换为 `.\main-1.0.0.exe`
+> 请将 "Music-Box-Designer-1.0.0.exe" 替换为实际的文件名，在接下来的命令中，都请自行把 `python main.py` 替换为 `.\Music-Box-Designer-1.0.0.exe`
 
 - convert（转换文件格式）
 
