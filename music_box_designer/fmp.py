@@ -4,11 +4,12 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, Any, BinaryIO, ClassVar, Literal, NamedTuple, Self
+from typing import Annotated, Any, BinaryIO, ClassVar, Literal, NamedTuple, Self, override
 
 import mido.midifiles.tracks
 from mido import Message, MetaMessage, MidiFile, MidiTrack
-from pydantic import BaseModel, Field, PlainSerializer
+from mido import merge_tracks as mido_merge_tracks
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_serializer, field_validator
 
 from .consts import MIDI_DEFAULT_TICKS_PER_BEAT
 from .log import logger
@@ -21,7 +22,7 @@ class TimeSignature(NamedTuple):
     denominator: int = 4
 
 
-@dataclass(frozen=True)
+@dataclass
 class FmpNote:
     pitch: int
     '''音高'''
@@ -32,15 +33,12 @@ class FmpNote:
     velocity: int
     '''音符的力度'''
 
-    def copy(self, **kwargs) -> Self:
-        return self.__class__(**(self.__dict__ | kwargs))
-
 
 @dataclass
 class FmpTrack:
     name: str = ''
     channel: int = 0
-    index: int = 0
+    index: int = 1
     color: int = 7
     muted: bool = False
     notes: list[FmpNote] = field(default_factory=lambda: [])
@@ -80,21 +78,38 @@ class FmpEndMark(FmpTimeMark):
     pass
 
 
-# type EffectorName = Literal['Effect_Reverb', 'Effect_Equalizer', 'Effect_Compressor', 'Effect_Limiter']
+class FmpModel(BaseModel):
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
-def to_str(x):
+    @override
+    def model_dump_json(self, mode='json', by_alias=True, **kwargs) -> str:
+        return json.dumps(
+            self.model_dump(mode=mode, by_alias=by_alias, **kwargs),
+            ensure_ascii=False,
+            separators=(',', ': '),
+        )
+
+
+def float_to_str(x: float) -> str:
+    if x == round(x):
+        return str(round(x))
     return str(x)
 
 
-type FloatSerializeToStr = Annotated[float, PlainSerializer(to_str)]
+def int_to_str(x: int) -> str:
+    return str(x)
 
 
-class FmpEffectorValue(BaseModel):
+type FloatSerializeToStr = Annotated[float, PlainSerializer(float_to_str, when_used='json')]
+type IntSerializeToStr = Annotated[int, PlainSerializer(int_to_str, when_used='json')]
+
+
+class FmpEffectorValue(FmpModel):
     pass
 
 
 class FmpReverbEffectorValue(FmpEffectorValue):
-    mix: FloatSerializeToStr = Field(0.2, alias='_mix')
+    mix: FloatSerializeToStr = Field(default=0.2, alias='_mix')
     room_size: FloatSerializeToStr = 0.75
     damping: FloatSerializeToStr = 0.7
     width: FloatSerializeToStr = 1.0
@@ -115,8 +130,11 @@ class FmpCompressorEffectorValue(FmpEffectorValue):
 
 class FmpLimiterEffectorValue(FmpEffectorValue):
     threshold: FloatSerializeToStr = 0.0
-    ceiling: FloatSerializeToStr = 0.0
+    ceiling: FloatSerializeToStr = -0.999999
     release: FloatSerializeToStr = 0.5
+
+
+# type EffectorName = Literal['Effect_Reverb', 'Effect_Equalizer', 'Effect_Compressor', 'Effect_Limiter']
 
 
 @dataclass
@@ -130,21 +148,25 @@ class FmpEffector:
 @dataclass
 class FmpReverbEffector(FmpEffector):
     effector_name: ClassVar[Literal['Effect_Reverb']] = 'Effect_Reverb'
+    effect_values: FmpReverbEffectorValue = field(default_factory=FmpReverbEffectorValue)
 
 
 @dataclass
 class FmpEqualizerEffector(FmpEffector):
     effector_name: ClassVar[Literal['Effect_Equalizer']] = 'Effect_Equalizer'
+    effect_values: FmpEqualizerEffectorValue = field(default_factory=FmpEqualizerEffectorValue)
 
 
 @dataclass
 class FmpCompressorEffector(FmpEffector):
     effector_name: ClassVar[Literal['Effect_Compressor']] = 'Effect_Compressor'
+    effect_values: FmpCompressorEffectorValue = field(default_factory=FmpCompressorEffectorValue)
 
 
 @dataclass
 class FmpLimiterEffector(FmpEffector):
     effector_name: ClassVar[Literal['Effect_Limiter']] = 'Effect_Limiter'
+    effect_values: FmpLimiterEffectorValue = field(default_factory=FmpLimiterEffectorValue)
 
 
 @dataclass
@@ -178,116 +200,118 @@ class FmpChannel:
 #     range: list[int] = field(default_factory=lambda: list(range(128)))
 
 
-instrument_presets: dict[str, dict[str, str]] = {
-    'Instrument_Preset_PaperStripMusicBox_30Note': {
-        'class': 'Instrument_PaperStripMusicBox',
-        'effective_trigger_spacing': '7',
-        'quarter_note_unit_lenght': '8',
-        'default_timbre': 'WangMusicBox,0',
-        'note_trigger_mode': 'Pizzicato',
-        'transpose': '5',
-        'range': '48,50,55,57,59,60,62,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,86,88',
-    },
-    'Instrument_Preset_PaperStripMusicBox_20Note': {
-        'class': 'Instrument_PaperStripMusicBox',
-        'effective_trigger_spacing': '7',
-        'quarter_note_unit_lenght': '8',
-        'default_timbre': 'WangMusicBox,0',
-        'note_trigger_mode': 'Pizzicato',
-        'transpose': '0',
-        'range': '60,62,64,65,67,69,71,72,74,76,77,79,81,83,84,86,88,89,91,93',
-    },
-    'Instrument_Preset_PaperStripMusicBox_15Note': {
-        'class': 'Instrument_PaperStripMusicBox',
-        'effective_trigger_spacing': '7',
-        'quarter_note_unit_lenght': '8',
-        'default_timbre': 'WangMusicBox,0',
-        'note_trigger_mode': 'Pizzicato',
-        'transpose': '8',
-        'range': '60,62,64,65,67,69,71,72,74,76,77,79,81,83,84',
-    },
+class DefaultTimbre(NamedTuple):
+    soundfont_name: str
+    soundfont_index: int
+
+
+class InstrumentConfig(FmpModel):
+    class_: str | None = Field(default=None, alias='class')
+    ratchet_spacing: FloatSerializeToStr | None = None
+    effective_trigger_spacing: FloatSerializeToStr | None = None
+    quarter_note_unit_length: FloatSerializeToStr | None = None
+    default_timbre: DefaultTimbre
+    note_trigger_mode: Literal['Sustain', 'Pizzicato']
+    transpose: IntSerializeToStr
+    range: list[int]
+
+    @field_validator('default_timbre', mode='before')
+    @classmethod
+    def validate_default_timbre(cls, v: str) -> DefaultTimbre:
+        soundfont_name, soundfont_index = v.rsplit(',', 1)
+        return DefaultTimbre(soundfont_name, int(soundfont_index))
+
+    @field_validator('range', mode='before')
+    @classmethod
+    def validate_range(cls, v: str) -> list[int]:
+        return list(int(x) for x in v.split(','))
+
+    @field_serializer('default_timbre', when_used='json')
+    def serialize_default_timbre(self, v: DefaultTimbre) -> str:
+        return f'{v.soundfont_name},{v.soundfont_index}'
+
+    @field_serializer('range', when_used='json')
+    def serialize_range(self, v: list[int]) -> str:
+        return ','.join(str(x) for x in v)
+
+    @override
+    def model_dump_json(self, exclude_none=True, **kwargs) -> str:
+        return super().model_dump_json(exclude_none=exclude_none, **kwargs)
+
+
+class DGProgramConfig(FmpModel):
+    class_: str = Field(default='GP_PaperStripMusicBox_PDFProgram', alias='class')
+    title: str | None = None
+    subtitle: str | None = None
+
+
+instrument_presets: dict[str, InstrumentConfig] = {
+    'Instrument_Preset_PaperStripMusicBox_15Note': InstrumentConfig(
+        class_='Instrument_PaperStripMusicBox',  # type: ignore
+        ratchet_spacing=2,
+        effective_trigger_spacing=7,
+        quarter_note_unit_length=8,
+        default_timbre='WangMusicBox,0',
+        note_trigger_mode='Pizzicato',
+        transpose=8,
+        range='60,62,64,65,67,69,71,72,74,76,77,79,81,83,84',
+    ),
+    'Instrument_Preset_PaperStripMusicBox_20Note': InstrumentConfig(
+        class_='Instrument_PaperStripMusicBox',  # type: ignore
+        ratchet_spacing=2,
+        effective_trigger_spacing=7,
+        quarter_note_unit_length=8,
+        default_timbre='WangMusicBox,0',
+        note_trigger_mode='Pizzicato',
+        transpose=0,
+        range='60,62,64,65,67,69,71,72,74,76,77,79,81,83,84,86,88,89,91,93',
+    ),
+    'Instrument_Preset_PaperStripMusicBox_30Note': InstrumentConfig(
+        class_='Instrument_PaperStripMusicBox',  # type: ignore
+        ratchet_spacing=2,
+        effective_trigger_spacing=7,
+        quarter_note_unit_length=8,
+        default_timbre='WangMusicBox,0',
+        note_trigger_mode='Pizzicato',
+        transpose=5,
+        range='48,50,55,57,59,60,62,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,86,88',
+    ),
 }
 
-default_instrument_cfgs: dict[str, dict[str, str]] = {
-    'Instrument': {
-        'default_timbre': '233PopRockBank,0',
-        'note_trigger_mode': 'Sustain',
-        'transpose': '0',
-        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,'
-                 '36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,'
-                 '69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,'
-                 '101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,'
-                 '125,126,127',
-    },
-    'Instrument_PaperStripMusicBox': {
-        'class': 'Instrument_PaperStripMusicBox',
-        'effective_trigger_spacing': '7',
-        'quarter_note_unit_lenght': '8',
-        'default_timbre': 'WangMusicBox,0',
-        'note_trigger_mode': 'Pizzicato',
-        'transpose': '0',
-        'range': '0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,'
-                 '36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,'
-                 '69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,'
-                 '101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,'
-                 '125,126,127',
-    }
+default_instrument_cfgs: dict[str, InstrumentConfig] = {
+    'Instrument': InstrumentConfig.model_validate_json(
+        '{"default_timbre": "233PopRockBank,0","note_trigger_mode": "Sustain","transpose": "0","range": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127"}'
+    ),
+    'Instrument_PaperStripMusicBox': InstrumentConfig.model_validate_json(
+        '{"class": "Instrument_PaperStripMusicBox","ratchet_spacing": "2","effective_trigger_spacing": "7","quarter_note_unit_length": "8","default_timbre": "WangMusicBox,0","note_trigger_mode": "Pizzicato","transpose": "0","range": "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127"}',
+    ),
 }
 
-default_dgprogram_cfg: dict[str, Any] = {
-    'class': 'GP_PaperStripMusicBox_PDFProgram',
-    'title': None,
-    'subtitle': None,
+
+def get_instrument_cfg(instrument_cfg: InstrumentConfig | None = None,
+                       instrument: str | None = None,
+                       default: InstrumentConfig | None = None) -> InstrumentConfig | None:
+    if instrument_cfg is not None:
+        return instrument_cfg
+    if instrument is not None and instrument in instrument_presets | default_instrument_cfgs:
+        return (instrument_presets | default_instrument_cfgs)[instrument]
+    if default is not None:
+        return default
+
+
+default_dgstyle_cfg: dict[str, Any] = {
+    "class": "GS_PaperStripMusicBox_Style",
+    "append_subtitle": None,
 }
 
-default_dgstyle_cfg: dict[str, str] = {
-    'class': 'GS_PaperStripMusicBox_Style',
-    'note_color': 'Black',
-    'note_size': '1.8',
-    'grid_spacing': '2',
-    'big_header': 'true',
-    'header_height': '48',
-    'title_offset': '16',
-    'header_cut_line_margin': '16',
-    'title_color': 'Black',
-    'subtitle_color': 'Black',
-    'interior_title': 'Without',
-    'interior_title_color': 'rgba32(0.00,0.00,0.00,0.40)',
-    'interior_subtitle_color': 'rgba32(0.00,0.00,0.00,0.40)',
-    'notename_color': 'Black',
-    'header_info_color': 'Black',
-    'page_size': '210,297',
-    'auto_size': 'false',
-    'page_margin': '0.00,0.00,0.00,0.00',
-    'strip_top_bottom_margin': '8',
-    'strip_left_right_margin': '6',
-    'background_color': 'White',
-    'include_big_page_number': 'false',
-    'big_page_number_color': 'rgba32(0.00,0.00,0.00,0.25)',
-    'include_section_line': 'true',
-    'section_line_font_color': 'Black',
-    'group': '6',
-    'splicing_type': 'Flat',
-    'overlap_height_grid': '8',
-    'custom_watermark_enabled': 'false',
-    'custom_watermark': '自定义水印',
-    'h_line_thickness': '0.15',
-    'h_line_color': 'rgba32(0.35,0.35,0.35,1.00)',
-    'half_beat_line_thickness': '0.15',
-    'half_beat_line_color': 'rgba32(0.35,0.35,0.35,1.00)',
-    'half_beat_line_style': 'Dashed',
-    'v_line_thickness': '0.15',
-    'v_line_color': 'rgba32(0.35,0.35,0.35,1.00)',
-    'group_line_thickness': '0.35',
-    'group_line_color': 'Gray',
-    'section_line_thickness': '0.35',
-    'section_line_color': 'rgba32(0.00,0.71,1.00,1.00)', 'bpm_and_time_signature_thickness': '0.35',
-    'bpm_and_time_signature_color': 'rgba32(1.00,0.52,0.00,1.00)',
-    'comment_thickness': '0.35',
-    'comment_color': 'DarkGreen',
-    'cut_line_thickness': '0.15',
-    'cut_line_color': 'Black',
-}
+
+# class DGStyleConfig(FmpModel):
+#     from pydantic_extra_types.color import Color
+#     class_: str = Field(default='GS_PaperStripMusicBox_Style', alias='class')
+#     note_color: Color | None = None
+#     note_size: FloatSerializeToStr | None = None
+
+#     append_subtitle: str | None = None
 
 
 @dataclass
@@ -297,16 +321,17 @@ class FmpFile:
     Use `FmpFile.new(...)` to create one.
     """
     file_format = 1
+    """`0` for FairyMusicBox 3.0.0, `1` for FairyMusicBox 3.1.0"""
     version: tuple[int, int, int] = (3, 1, 0)
     compatible_version: tuple[int, int, int] = (3, 1, 0)
     tempo: int = 500000
     time_signature: TimeSignature = TimeSignature(4, 4)
     scale: int = 100000
+    """100000 for 1.0x, 200000 for 2.0x, etc."""
     ticks_per_beat: int = FMP_DEFAULT_TICKS_PER_BEAT
     instrument: str = 'Instrument_Preset_PaperStripMusicBox_30Note'
-    note: str | None = None
-    '''`' [ **** This file created by FairyMusicBox - www.fairymusicbox.com **** ] '`by default'''
-    show_info_on_open: bool | None = None
+    note: str | None = ' [ **** This file created by FairyMusicBox - www.fairymusicbox.com **** ] '
+    show_info_on_open: bool | None = False
     title: str | None = None
     subtitle: str | None = None
     comment: str | None = None
@@ -314,29 +339,33 @@ class FmpFile:
     time_marks: list[FmpTimeMark] = field(default_factory=list)
     channels: list[FmpChannel] = field(default_factory=list)
     ignore_issues: str | None = ''
-    instrument_cfg: dict[str, str] | None = None
-    dgprogram_cfg: dict[str, Any] | None = None
-    dgstyle_cfg: dict[str, str] | None = None
+    instrument_cfg: InstrumentConfig | None = None
+    dgprogram_cfg: DGProgramConfig | None = None
+    dgstyle_cfg: dict[str, Any] | None = None
 
     file_path: Path | None = None
 
     @classmethod
     def new(cls,
             instrument: str = 'Instrument_Preset_PaperStripMusicBox_30Note',
-            instrument_cfg: dict[str, str] | None = None,
-            title: str = '',
-            subtitle: str = '',
-            comment: str = '',
+            instrument_cfg: InstrumentConfig | None = None,
+            title: str | None = None,
+            subtitle: str | None = None,
+            comment: str | None = None,
+            show_info_on_open: bool = False,
             add_channel: bool = True,
             add_empty_track: bool = True) -> Self:
         # I'm not sure whether changing the fmp_file.ticks_per_beat attribute to a value other than
         # FMP_DEFAULT_TICKS_PER_BEAT (=96) is a good behavior. So by now the parameter is not added to this function.
-        fmp_file: Self = cls(title=title,
-                             subtitle=subtitle,
-                             comment=comment,
-                             instrument=instrument)
+        fmp_file: Self = cls(
+            title=title,
+            subtitle=subtitle,
+            comment=comment,
+            show_info_on_open=show_info_on_open,
+            instrument=instrument,
+        )
         if instrument not in instrument_presets | default_instrument_cfgs:
-            logger.error(f'Unrecognized instrument: {instrument}. File may fail to be opened by FairyMusicBox 3.0.0.')
+            logger.error(f'Unrecognized instrument: {instrument}. File may fail to be opened by FairyMusicBox 3.1.0.')
 
         if instrument_cfg is not None:
             fmp_file.instrument_cfg = instrument_cfg
@@ -349,15 +378,24 @@ class FmpFile:
                 instrument_cfg = (instrument_presets | default_instrument_cfgs)[instrument]
 
         if 'PaperStripMusicBox' in instrument:
-            fmp_file.dgprogram_cfg = default_dgprogram_cfg
+            fmp_file.dgprogram_cfg = DGProgramConfig()
             fmp_file.dgstyle_cfg = default_dgstyle_cfg
 
+        master_channel = FmpChannel(effectors=[FmpLimiterEffector()])
+        fmp_file.channels.append(master_channel)
         if (add_channel
                 and instrument_cfg is not None
-                and 'default_timbre' in instrument_cfg):
-            soundfont_name, soundfont_index = instrument_cfg['default_timbre'].rsplit(',', 1)
-            channel = FmpChannel(soundfont_name=soundfont_name,
-                                 soundfont_index=int(soundfont_index))
+                and instrument_cfg.default_timbre is not None):
+            soundfont_name, soundfont_index = instrument_cfg.default_timbre
+            channel = FmpChannel(
+                soundfont_name=soundfont_name if soundfont_name != 'WangMusicBox' else '',
+                soundfont_index=soundfont_index,
+                participate_generate=True,
+                transposition=0,
+                note_trigger_mode=0,
+                inherit=True,
+                range=list(range(128)),
+            )
             fmp_file.channels.append(channel)
 
         if add_empty_track:
@@ -365,7 +403,7 @@ class FmpFile:
 
         return fmp_file
 
-    def get_instrument_cfg(self) -> dict[str, str]:
+    def get_instrument_cfg(self) -> InstrumentConfig:
         if self.instrument_cfg is not None:
             return self.instrument_cfg
         if self.instrument in instrument_presets:
@@ -512,7 +550,7 @@ class FmpFile:
 
         # 通道
         assert file.read(3) == b'CNL'
-        _: int = read_int(file, 4)
+        _ = read_int(file, 4)
         channel_count: int = read_int(file, 4)
         for i in range(channel_count):
             # if i == 0:
@@ -558,30 +596,41 @@ class FmpFile:
                             raise ValueError
 
             _ = read_int(file, 4)
-            effector_num = read_int(file, 4)
+            effector_num: int = read_int(file, 4)
             for _ in range(effector_num):
-                effector_name_length = read_int(file, 2)
-                effector_name = file.read(effector_name_length).decode()
-                match effector_name:
-                    case 'Effect_Reverb':
-                        effector = FmpReverbEffector()
-                        value_class = FmpReverbEffectorValue
-                    case 'Effect_Equalizer':
-                        effector = FmpEqualizerEffector()
-                        value_class = FmpEqualizerEffectorValue
-                    case 'Effect_Compressor':
-                        effector = FmpCompressorEffector()
-                        value_class = FmpCompressorEffectorValue
-                    case 'Effect_Limiter':
-                        effector = FmpLimiterEffector()
-                        value_class = FmpLimiterEffectorValue
-                    case _:
-                        raise ValueError
-                effector.enabled = read_bool(file)
-                effector.mix_level = read_float(file, 4)
+                effector_name_length: int = read_int(file, 2)
+                effector_name: str = file.read(effector_name_length).decode()
+                enabled: bool = read_bool(file)
+                mix_level: float = read_float(file, 4)
                 num = read_int(file, 4)
                 effect_values_str = file.read(num).decode()
-                effector.effect_values = value_class.model_validate_json(effect_values_str)
+                match effector_name:
+                    case 'Effect_Reverb':
+                        effector = FmpReverbEffector(
+                            enabled=enabled,
+                            mix_level=mix_level,
+                            effect_values=FmpReverbEffectorValue.model_validate_json(effect_values_str),
+                        )
+                    case 'Effect_Equalizer':
+                        effector = FmpEqualizerEffector(
+                            enabled=enabled,
+                            mix_level=mix_level,
+                            effect_values=FmpEqualizerEffectorValue.model_validate_json(effect_values_str),
+                        )
+                    case 'Effect_Compressor':
+                        effector = FmpCompressorEffector(
+                            enabled=enabled,
+                            mix_level=mix_level,
+                            effect_values=FmpCompressorEffectorValue.model_validate_json(effect_values_str),
+                        )
+                    case 'Effect_Limiter':
+                        effector = FmpLimiterEffector(
+                            enabled=enabled,
+                            mix_level=mix_level,
+                            effect_values=FmpLimiterEffectorValue.model_validate_json(effect_values_str),
+                        )
+                    case _:
+                        raise ValueError
                 channel.effectors.append(effector)
 
             fmp_file.channels.append(channel)
@@ -595,13 +644,13 @@ class FmpFile:
                 case 'ignore_issues':
                     fmp_file.ignore_issues = file.read(value_length).decode()
                 case 'instrument_cfg':
-                    fmp_file.instrument_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    fmp_file.instrument_cfg = InstrumentConfig.model_validate_json(file.read(value_length - 1))
                     assert file.read(1) == bytes(1)
                 case 'dgprogram_cfg':
-                    fmp_file.dgprogram_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    fmp_file.dgprogram_cfg = DGProgramConfig.model_validate_json(file.read(value_length - 1))
                     assert file.read(1) == bytes(1)
                 case 'dgstyle_cfg':
-                    fmp_file.dgstyle_cfg = json.loads(file.read(value_length - 1).decode().replace('\n', '\\n'))
+                    fmp_file.dgstyle_cfg = json.loads(file.read(value_length - 1).decode())
                     assert file.read(1) == bytes(1)
                 case _:
                     raise ValueError
@@ -645,7 +694,13 @@ class FmpFile:
             file.write(self.instrument.encode())
             file.write(b'\x03\x00\x00\x00')
 
-        num: int = (self.note is not None) + (self.show_info_on_open is not None) + (self.title is not None) + (self.subtitle is not None) + (self.comment is not None)
+        num: int = (
+            (self.note is not None)
+            + (self.show_info_on_open is not None)
+            + (self.title is not None)
+            + (self.subtitle is not None)
+            + (self.comment is not None)
+        )
         write_int(file, num, 4)
         if self.note is not None:
             write_int(file, 4, 1)
@@ -783,11 +838,16 @@ class FmpFile:
                         file.write(effector.effector_name.encode())
                         write_bool(file, effector.enabled)
                         write_float(file, effector.mix_level, 4)
-                        bytes_data = json.dumps(effector.effect_values.model_dump(), separators=(',', ': ')).encode()
+                        bytes_data = effector.effect_values.model_dump_json().encode()
                         write_int(file, len(bytes_data), 4)
                         file.write(bytes_data)
 
-        num = (self.ignore_issues is not None) + (self.instrument_cfg is not None) + (self.dgprogram_cfg is not None) + (self.dgstyle_cfg is not None)
+        num = (
+            (self.ignore_issues is not None)
+            + (self.instrument_cfg is not None)
+            + (self.dgprogram_cfg is not None)
+            + (self.dgstyle_cfg is not None)
+        )
         write_int(file, num, 4)
         if self.ignore_issues is not None:
             write_int(file, 13, 1)
@@ -796,14 +856,14 @@ class FmpFile:
             file.write(self.ignore_issues.encode())
         if self.instrument_cfg is not None:
             write_int(file, 14, 1)
-            bytes_data: bytes = json.dumps(self.instrument_cfg, ensure_ascii=False, separators=(',', ': ')).encode()
+            bytes_data: bytes = self.instrument_cfg.model_dump_json().encode()
             write_int(file, len(bytes_data) + 1, 3)
             file.write(b'instrument_cfg')
             file.write(bytes_data)
             file.write(bytes(1))
         if self.dgprogram_cfg is not None:
             write_int(file, 13, 1)
-            bytes_data: bytes = json.dumps(self.dgprogram_cfg, ensure_ascii=False, separators=(',', ': ')).encode()
+            bytes_data: bytes = self.dgprogram_cfg.model_dump_json().encode()
             write_int(file, len(bytes_data) + 1, 3)
             file.write(b'dgprogram_cfg')
             file.write(bytes_data)
@@ -826,24 +886,41 @@ class FmpFile:
                     override: bool = True,
                     transposition: int = 0,
                     offset_global_transpose_config: bool = True,  # 抵消全局移调配置
-                    merge_tracks: bool = False,  # TODO
+                    merge_tracks: bool = False,
                     ) -> Self:
         """
         This is not a classmethod.
         Use `FmpFile.new(...)` to firstly create an fmp file and then call this method.
         """
+
+        logger.info(f'Importing midi file {midi_file.filename!r}...')
+
+        # load file_path from midi_file.filename
+        if self.file_path is None and midi_file.filename is not None:
+            try:
+                self.file_path = Path(midi_file.filename)
+            except TypeError:
+                pass
+
         # load title from midi_file.filename
         if override and midi_file.filename is not None:
             try:
                 file_path = Path(midi_file.filename)
                 self.title = file_path.stem
-                self.file_path = file_path
             except TypeError:
                 self.title = str(midi_file.filename)
 
+        if offset_global_transpose_config:
+            transposition -= int(self.get_instrument_cfg().transpose)
+
+        if merge_tracks:
+            tracks: list[MidiTrack] = [MidiTrack(mido_merge_tracks(midi_file.tracks))]
+        else:
+            tracks = midi_file.tracks
+
         new_tracks: list[FmpTrack] = []
         new_time_marks: list[FmpTimeMark] = []
-        for midi_track in midi_file.tracks:
+        for midi_track in tracks:
             fmp_track = FmpTrack()
             unclosed_notes: defaultdict[int, list[FmpNote]] = defaultdict(list)
 
@@ -854,10 +931,7 @@ class FmpFile:
                 try:
                     match message.type:
                         case 'note_on' | 'note_off':
-                            if offset_global_transpose_config:
-                                pitch: int = message.note + transposition - int(self.get_instrument_cfg()['transpose'])
-                            else:
-                                pitch = message.note + transposition
+                            pitch: int = message.note + transposition
 
                             if message.type == 'note_on' and message.velocity > 0:
                                 if pitch not in range(128):
@@ -876,8 +950,8 @@ class FmpFile:
                                 except IndexError:
                                     logger.warning(f'No note_on message found to match with {message!r}.')
                                     continue
-                                fmp_track.notes.append(note.copy(
-                                    duration=round(time * self.ticks_per_beat - note.tick)))
+                                note.duration = round(time * self.ticks_per_beat - note.tick)
+                                fmp_track.notes.append(note)
 
                         case 'track_name':
                             if not fmp_track.name:
@@ -919,12 +993,12 @@ class FmpFile:
             for key, stack in unclosed_notes.items():
                 for note in reversed(stack):
                     logger.warning(f'No note_off message found to match with {note!r}.')
-                    fmp_track.notes.append(note.copy(
-                        duration=round(midi_tick / midi_file.ticks_per_beat * self.ticks_per_beat - note.tick)))
+                    note.duration = round(midi_tick / midi_file.ticks_per_beat * self.ticks_per_beat - note.tick)
+                    fmp_track.notes.append(note)
 
             if fmp_track.notes:
-                fmp_track.notes.sort(key=lambda note: note.tick)
-                fmp_track.index = len(new_tracks)
+                # fmp_track.notes.sort(key=lambda note: (note.tick, note.pitch))
+                fmp_track.index = len(new_tracks) + 1 if override else len(self.tracks) + len(new_tracks) + 1
                 new_tracks.append(fmp_track)
 
         if override:
@@ -935,18 +1009,20 @@ class FmpFile:
             self.time_marks.extend(new_time_marks)
         self.time_marks.sort(key=lambda time_mark: time_mark.tick)
 
-        if merge_tracks:
-            raise NotImplementedError
-
         return self
 
     def export_midi(self,
                     transposition: int = 0,
                     apply_instrument_transposition: bool = True,
+                    apply_scale: bool = False,
                     ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT,
                     ) -> MidiFile:
         midi_file = MidiFile(charset='gbk')
         midi_file.ticks_per_beat = ticks_per_beat
+
+        if apply_instrument_transposition:
+            transposition += int(self.get_instrument_cfg().transpose)
+        scale: float = self.scale / 100000 if apply_scale else 1
 
         time_signature_track = MidiTrack()
         tempo_track = MidiTrack()
@@ -968,13 +1044,13 @@ class FmpFile:
                         type='time_signature',
                         numerator=time_mark.time_signature.numerator,
                         denominator=time_mark.time_signature.denominator,
-                        time=round(time_mark.tick / self.ticks_per_beat * ticks_per_beat),
+                        time=round(time_mark.tick / self.ticks_per_beat * scale * ticks_per_beat),
                     ))
                 if time_mark.change_tempo:
                     tempo_track.append(MetaMessage(
                         type='set_tempo',
-                        tempo=time_mark.tempo,
-                        time=round(time_mark.tick / self.ticks_per_beat * ticks_per_beat),
+                        tempo=round(time_mark.tempo / scale),
+                        time=round(time_mark.tick / self.ticks_per_beat * scale * ticks_per_beat),
                     ))
             else:
                 logger.debug(f'Skipped {time_mark!r} when exporting to midi.')
@@ -985,14 +1061,10 @@ class FmpFile:
         for track in self.tracks:
             midi_track = MidiTrack()
             midi_track.name = track.name
-            # midi_track.append(MetaMessage(type='track_name', name=track.name, time=0))
             midi_track.append(Message(type='program_change', program=10, time=0))
 
             for note in sorted(track.notes, key=lambda note: note.tick):
-                if apply_instrument_transposition:
-                    pitch: int = note.pitch + transposition + int(self.get_instrument_cfg()['transpose'])
-                else:
-                    pitch = note.pitch + transposition
+                pitch: int = note.pitch + transposition
                 if pitch not in range(128):
                     logger.warning(f'Note {note.pitch} out of range(128), SKIPPING!')
                     continue
@@ -1000,12 +1072,12 @@ class FmpFile:
                     type='note_on',
                     note=pitch,
                     velocity=round(note.velocity / 255 * 127),
-                    time=round(note.tick / self.ticks_per_beat * ticks_per_beat),
+                    time=round(note.tick / self.ticks_per_beat * scale * ticks_per_beat),
                 ))
                 midi_track.append(Message(
                     type='note_off',
                     note=pitch,
-                    time=round((note.tick + note.duration) / self.ticks_per_beat * ticks_per_beat),
+                    time=round((note.tick + note.duration) / self.ticks_per_beat * scale * ticks_per_beat),
                 ))
             midi_track.sort(key=lambda msg: msg.time)
             midi_file.tracks.append(MidiTrack(mido.midifiles.tracks._to_reltime(midi_track)))

@@ -16,7 +16,7 @@ from pydantic import BaseModel, FilePath, FiniteFloat, NonNegativeFloat, Positiv
 from pydantic_extra_types.color import Color
 
 from .emid import EMID_PITCHES, EMID_TICKS_PER_BEAT, EmidFile
-from .fmp import FmpFile
+from .fmp import FmpFile, InstrumentConfig
 from .log import logger
 from .mcode import DEFAULT_PPQ, MCodeFile, MCodeNote, get_arranged_notes
 from .presets import MusicBox, music_box_30_notes, music_box_presets
@@ -291,7 +291,7 @@ class Draft:
                                           skip_near_notes=skip_near_notes,
                                           bpm=bpm)
             case '.fmp':
-                return cls.load_from_fmp(FmpFile.load_from_file(file_path),
+                return cls.load_from_fmp(FmpFile.open(file_path),
                                          preset=preset,
                                          transposition=transposition,
                                          remove_blank=remove_blank,
@@ -353,15 +353,25 @@ class Draft:
                       bpm: float | None = None,
                       ) -> Self:
         self: Self = cls()
-        # TODO: Use fmp_file.instrument and fmp_file.instrument_cfg
         if preset is None:
-            preset = music_box_presets.get(
-                {
-                    'Instrument_Preset_PaperStripMusicBox_30Note': 30,
-                    'Instrument_Preset_PaperStripMusicBox_20Note': 20,
-                    'Instrument_Preset_PaperStripMusicBox_15Note': 15,
-                }.get(fmp_file.instrument, 30),
-                music_box_30_notes,
+            instrument_cfg: InstrumentConfig = fmp_file.get_instrument_cfg()
+            grid_width: float = (instrument_cfg.ratchet_spacing
+                                 if instrument_cfg.ratchet_spacing is not None
+                                 else 2)
+            min_trigger_spacing: float = (instrument_cfg.effective_trigger_spacing
+                                          if instrument_cfg.effective_trigger_spacing is not None
+                                          else music_box_30_notes.min_trigger_spacing)
+            length_mm_per_beat: float = (instrument_cfg.quarter_note_unit_length
+                                         if instrument_cfg.quarter_note_unit_length is not None
+                                         else music_box_30_notes.length_mm_per_beat)
+            preset = MusicBox(
+                note_count=len(instrument_cfg.range),
+                range=instrument_cfg.range,
+                grid_width=grid_width,
+                left_border=music_box_30_notes.left_border,
+                right_border=music_box_30_notes.right_border,
+                min_trigger_spacing=min_trigger_spacing,
+                length_mm_per_beat=length_mm_per_beat,
             )
         self.preset = preset
         self.title = self.music_info = fmp_file.title
