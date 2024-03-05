@@ -71,7 +71,7 @@ def fmp_to_midi(source_file_path: str | Path,
                 destination_file_path: str | Path,
                 transposition: int = 0,
                 overwrite: bool = False) -> None:
-    FmpFile.load_from_file(
+    FmpFile.open(
         source_file_path
     ).export_midi(
         transposition=transposition
@@ -87,7 +87,7 @@ def midi_to_fmp(source_file_path: str | Path,
     FmpFile.new('Instrument').import_midi(
         MidiFile(source_file_path),
         transposition=transposition,
-    ).save_to_file(
+    ).save(
         find_available_filename(destination_file_path, overwrite=overwrite)
     )
 

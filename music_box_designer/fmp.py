@@ -375,7 +375,7 @@ class FmpFile:
         raise ValueError(f'{self.instrument} is not in presets, and has no default instrument_cfg.')
 
     @classmethod
-    def load_from_file(cls, file: str | Path | BinaryIO) -> Self:
+    def open(cls, file: str | Path | BinaryIO) -> Self:
         if isinstance(file, (str, Path)):
             with open(file, 'rb') as fp:
                 self: Self = cls._load_from_file(fp)
@@ -617,15 +617,13 @@ class FmpFile:
         for track in self.tracks:
             track.set_velocity(velocity)
 
-    def save_to_file(self, file: str | Path | BinaryIO) -> None:
-        # TODO: open file with 'wb' mode before writing is a very DANGEROUS behavior.
-        # It may cause data loss if the file already exists.
+    def save(self, file: str | Path | BinaryIO) -> None:
+        data = self.to_bytes()
         if isinstance(file, (str, Path)):
-            # Path(file).parent.mkdir(parents=True, exist_ok=True)
             with open(file, 'wb') as fp:
-                self._save_to_file(fp)
+                fp.write(data)
         else:
-            self._save_to_file(file)
+            file.write(data)
 
     def _save_to_file(self, file: BinaryIO) -> None:
         file.write(b'FMP')
