@@ -5,7 +5,7 @@ from typing import overload
 @dataclass(frozen=True)
 class MusicBox:
     note_count: int
-    range: tuple[int, ...]
+    range: list[int]
     grid_width: float
     left_border: float
     right_border: float
@@ -23,9 +23,9 @@ class MusicBox:
 
 music_box_30_notes = MusicBox(
     note_count=30,
-    range=(53, 55, 60, 62, 64, 65, 67, 69, 70, 71,
+    range=[53, 55, 60, 62, 64, 65, 67, 69, 70, 71,
            72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-           82, 83, 84, 85, 86, 87, 88, 89, 91, 93),
+           82, 83, 84, 85, 86, 87, 88, 89, 91, 93],
     grid_width=2,
     left_border=6,
     right_border=6,
@@ -33,8 +33,8 @@ music_box_30_notes = MusicBox(
 
 music_box_20_notes = MusicBox(
     note_count=20,
-    range=(60, 62, 64, 65, 67, 69, 71, 72, 74, 76,
-           77, 79, 81, 83, 84, 86, 88, 89, 91, 93),
+    range=[60, 62, 64, 65, 67, 69, 71, 72, 74, 76,
+           77, 79, 81, 83, 84, 86, 88, 89, 91, 93],
     grid_width=3,
     left_border=6.5,
     right_border=6.5,
@@ -42,8 +42,8 @@ music_box_20_notes = MusicBox(
 
 music_box_15_notes = MusicBox(
     note_count=15,
-    range=(68, 70, 72, 73, 75, 77, 79,
-           80, 82, 84, 85, 87, 89, 91, 92),
+    range=[68, 70, 72, 73, 75, 77, 79,
+           80, 82, 84, 85, 87, 89, 91, 92],
     grid_width=2,
     left_border=6,
     right_border=6,
