@@ -10,7 +10,7 @@ def convert_func(args) -> None:
 
 def draft_func(args) -> None:
     return generate_draft(
-        file_path=args.file_path,
+        source_path=args.file_path,
         settings_path=args.settings_path,
         pdf=args.pdf,
         note_count=args.note_count,

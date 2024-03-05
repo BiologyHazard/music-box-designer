@@ -21,7 +21,7 @@ from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
 from .mcode import MCodeFile
-from .presets import MusicBox, get_preset, music_box_30_notes, music_box_presets
+from .presets import get_preset
 
 # from functools import wraps
 # from typing import TypeVar
@@ -166,7 +166,8 @@ def convert(source: str | Path,
             return convert(path, temp_destination, transposition=transposition, overwrite=overwrite)
 
 
-def generate_draft(file_path: str | Path,
+def generate_draft(source_path: str | Path,
+                   destination: str | Path | None = None,
                    settings_path: str | Path | None = None,
                    pdf: bool = False,
                    note_count: int | None = None,
@@ -194,7 +195,7 @@ def generate_draft(file_path: str | Path,
     #     raise ValueError(f'{note_count} note music box not in presets.')
     # preset: MusicBoxPreset | None = music_box_presets[note_count] if note_count is not None else None
     Draft.load_from_file(
-        file_path,
+        source_path,
         preset=get_preset(note_count),
         transposition=transposition,
         remove_blank=remove_blank,
@@ -207,7 +208,7 @@ def generate_draft(file_path: str | Path,
         music_info=music_info,
         show_bpm=show_bpm,
         scale=scale,
-    ).save(format='PDF' if pdf else 'PNG', overwrite=overwrite)
+    ).save(destination, format='PDF' if pdf else 'PNG', overwrite=overwrite)
 
 
 def get_note_count_and_length(file_path: str | Path,
