@@ -23,7 +23,7 @@ background: white
 # 字体文件路径
 font_path: fonts/SourceHanSans.otf
 # 页面顶部文字
-heading: 打谱软件：https://github.com/BiologyHazard/MusicBoxDesigner
+heading: 打谱软件：https://github.com/BiologyHazard/music-box-designer
 # 页面顶部文字大小，单位毫米，将以 round(heading_size * ppi / MM_PER_INCH) 转变为像素大小
 heading_size: 3.5
 # 页面顶部文字颜色
@@ -126,6 +126,6 @@ whole_beat_line_color: black
 # 半拍线条类型，solid 表示实线，dashed 表示虚线
 half_beat_line_type: solid
 # 半拍线条颜色
-half_beat_line_color: grey
+half_beat_line_color: gray
 # 竖向线条颜色
 vertical_line_color: black
