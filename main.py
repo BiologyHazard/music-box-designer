@@ -10,7 +10,7 @@ def convert_func(args) -> None:
 
 def draft_func(args) -> None:
     return generate_draft(
-        source_path=args.file_path,
+        source_path=args.source,
         destination=args.destination,
         settings_path=args.settings_path,
         pdf=args.pdf,
@@ -69,8 +69,8 @@ parser.add_argument('--log-level',
                     choices=['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'])
 convert_parser = subparsers.add_parser(
     'convert',
-    help='Convert .emid / .fmp / .mid file to another format.',
-    description='Convert .emid / .fmp / .mid file to another format.',
+    help='Convert .mid / .fmp / .mcode / .emid file to another format.',
+    description='Convert .mid / .fmp / .mcode / .emid file to another format.',
     epilog=f'''examples:
   {parser.prog} convert examples/example.emid examples/example.mid
   {parser.prog} convert examples/example.emid .mid    # equivalent to the previous command
@@ -94,11 +94,23 @@ convert_parser.add_argument(
 convert_parser.add_argument('-t', '--transposition', type=int, default=0)
 convert_parser.add_argument('-o', '--overwrite', action='store_true')
 
-draft_parser = subparsers.add_parser('draft', help='Generate draft pics.')
+draft_parser = subparsers.add_parser(
+    'draft',
+    help='Generate draft pics.',
+    description='Generate draft pics.',
+    epilog=f'''examples:
+  {parser.prog} draft examples/example.mid    # generate draft pics to examples/example_<page>.png
+  {parser.prog} draft examples/example.mid .jpg    # generate draft pics to examples/example_<page>.jpg
+  {parser.prog} draft examples/example.mid examples/example.pdf
+  {parser.prog} draft examples/example.mid -p    # equivalent to the previous command
+  {parser.prog} draft examples/*.mid .pdf
+  {parser.prog} draft examples/example.mid -c draft_settings.yml''',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+)
 draft_parser.set_defaults(func=draft_func)
-draft_parser.add_argument('file_path', type=str)
-draft_parser.add_argument('settings_path', type=str, nargs='?', default='draft_settings.yml')
-draft_parser.add_argument('-d', '--destination', type=str)
+draft_parser.add_argument('source', type=str)
+draft_parser.add_argument('destination', type=str, nargs='?')
+draft_parser.add_argument('-c', '--settings-path', type=str, default='draft_settings.yml')
 draft_parser.add_argument('-p', '--pdf', action='store_true')
 draft_parser.add_argument('-N', '--note-count', type=int)
 draft_parser.add_argument('-t', '--transposition', type=int, default=0)

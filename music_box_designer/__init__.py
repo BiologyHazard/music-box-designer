@@ -12,6 +12,7 @@ __all__: list[str] = [
 ]
 
 import itertools
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -24,9 +25,9 @@ from .emid import EmidFile
 from .fmp import FmpFile
 from .log import logger
 from .mcode import MCodeFile
+from .midi_tools import random_time_and_velocity
 from .presets import get_preset
 from .recognize import Note, export_midi, recognize_multi_image, recognize_pdf
-from .midi_tools import random_time_and_velocity
 
 
 def pure_suffix(path: Path) -> str:
@@ -143,10 +144,11 @@ _FUNCTIONS: dict[tuple[str, str], Callable[[str | Path, str | Path, int, bool], 
 }
 
 
-def convert(source: str | Path,
-            destination: str | Path,
+def convert(source: os.PathLike,
+            destination: os.PathLike,
             transposition: int = 0,
             overwrite: bool = False) -> None:
+    # TODO: 如果 destination 为 "./.mid"，则 Path(destination) 会变成 Path(".mid")
 
     source = Path(source)
     destination = Path(destination)
@@ -191,6 +193,8 @@ def generate_draft(source_path: str | Path,
                    scale: float = 1,
                    overwrite: bool = False,
                    **kwargs) -> None:
+    # TODO: 仔细处理 destination
+
     if settings_path is None or not Path(settings_path).is_file():
         logger.warning(f'Settings path not specified, using kwargs {kwargs!r} to initialize DraftSettings.')
         settings: DraftSettings = DraftSettings(**kwargs)
@@ -203,6 +207,8 @@ def generate_draft(source_path: str | Path,
     source = Path(source_path)
     if pure_suffix(source) not in _SUPPORTED_SUFFIXES:
         raise ValueError("The source extension must be '.emid', '.fmp' or '.mid'.")
+    # if destination is None:
+    #     destination = source.with_suffix('.pdf' if pdf else '.png')
 
     if pure_stem(source) not in ('', '*'):  # 如果指定了特定一个文件
         return Draft.load_from_file(
@@ -219,7 +225,7 @@ def generate_draft(source_path: str | Path,
             music_info=music_info,
             tempo_text=tempo_text,
             scale=scale,
-        ).save(destination, format='PDF' if pdf else 'PNG', overwrite=overwrite)
+        ).save(destination, format='PDF' if pdf else None, overwrite=overwrite)
 
     # 如果未指定特定一个文件，则把 source 目录下所有符合扩展名的文件全部转换
     for path in source.parent.iterdir():
@@ -227,7 +233,7 @@ def generate_draft(source_path: str | Path,
             if destination is None:
                 temp_destination = None
             else:
-                temp_destination = Path(destination) / f'{path.stem}{'.pdf' if pdf else '_{}.png'}'
+                temp_destination = Path(destination) / ('{file_stem}_{page_num_from_1}.png' if not pdf else '{file_stem}.pdf')
             # 递归调用 generate_draft 单文件的版本
             generate_draft(
                 source_path=path,

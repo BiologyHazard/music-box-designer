@@ -203,6 +203,9 @@ class ImageList(list[Image.Image]):
     file_name: str
     title: str
     paper_size: tuple[float, float]
+    dpi: float
+    length_mm: float
+    note_count: int
 
     def save(self, file_name: str | Path | None = None, format: str | None = None, overwrite: bool = False) -> None:
         """
@@ -213,11 +216,10 @@ class ImageList(list[Image.Image]):
             对于图片格式，是文件保存路径的格式化字符串，例如 `'output/pic_{}.png'`。若不指定，则取 `'<self.file_name>_{}.png'`
             对于 PDF 格式，是文件保存路径，例如 `'output/music_box.pdf'`。若不指定，则取 `'<self.file_name>.pdf'`
         - `format`: 保存文件的格式，可以是 `'PDF'`，或一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
-        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
+        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`。
         """
         # TODO: What if self doesn't have attribute 'file_name'?
-        # if format is None and file_name is not None:
-        #     format = Path(file_name).suffix.lstrip('.').upper()
+
         if format is not None and format.upper() == 'PDF':
             return self.save_pdf(file_name, overwrite)
         else:
@@ -228,36 +230,116 @@ class ImageList(list[Image.Image]):
         保存图片到文件，文件格式由参数 `file_name` 推断。
 
         参数：
-        - `file_name`: 文件保存路径的格式化字符串，例如 `'output/pic_{}.png'`。若不指定，则取 `'<self.file_name>_{}.png'`
+        - `file_name`: 文件保存路径的格式化字符串，例如 `"output/pic_{page_num_from_0}.png"`。默认为 `"{file_stem}_{page_num_from_1}.png"`，支持参数 `file_stem`, `page_num_from_0`, `page_num_from_1`, `meter`, `centimeter`, `millimeter` 和 `note_count`。
         - `format`: 保存文件的格式，可以是一种 Pillow 支持的图片格式。若不指定，则由 `file_name` 推断。
-        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
+        - `overwrite`: 是否允许覆盖同名文件，默认为 `False`。
         """
-        # TODO: What if self doesn't have attribute 'file_name'?
+        # TODO: What if self doesn't have attribute 'file_stem'?
+
         if file_name is None:
-            file_name = f'{self.file_name}_{{}}.png'
+            file_name = "{file_stem}_{page_num_from_1}.png"
         if isinstance(file_name, Path):
             file_name = file_name.as_posix()
         for i, image in enumerate(self):
-            path_to_save: Path = find_available_filename(file_name.format(i + 1), overwrite=overwrite)
+            format_dict = dict(
+                file_stem=Path(self.file_name).name,
+                page_num_from_0=i,
+                page_num_from_1=i+1,
+                meter=self.length_mm / 1000,
+                centimeter=self.length_mm / 100,
+                millimeter=self.length_mm,
+                note_count=self.note_count,
+            )
+            path_to_save: Path = find_available_filename(file_name.format(**format_dict), overwrite=overwrite)
             logger.info(f'Saving image {i + 1} of {len(self)} to {path_to_save.as_posix()}...')
             image.save(path_to_save, format=format)
 
-    def save_pdf(self, file_name: str | Path | None = None, overwrite: bool = True) -> None:
+    def save_pdf(self, file_name: str | Path | None = None, overwrite: bool = False) -> None:
         """
         由图片生成 PDF 文档，并保存到文件。
 
         参数：
-        - `file_name`: 文件保存路径的格式化字符串，例如 `'output/music_box.pdf'`。若不指定，则取 `'<self.file_name>.pdf'`
+        - `file_name`: 文件保存路径的格式化字符串，例如 `'output/music_box [{meter:.2f}m, {note_count} notes].pdf'`。默认为 `'{file_stem}.pdf'`，支持参数 `file_stem`, `meter`, `centimeter`, `millimeter` 和 `note_count`。
         - `overwrite`: 是否允许覆盖同名文件，默认为 `False`
         """
-        from reportlab.lib.units import mm
-        from reportlab.pdfgen.canvas import Canvas
+
+        if not self:
+            raise ValueError('No images to save.')
 
         if file_name is None:
-            file_name = f'{self.file_name}.pdf'
+            file_name = "{file_stem}.pdf"
+        if isinstance(file_name, Path):
+            file_name = file_name.as_posix()
+        format_dict = dict(
+            file_stem=Path(self.file_name).name,
+            meter=self.length_mm / 1000,
+            centimeter=self.length_mm / 100,
+            millimeter=self.length_mm,
+            note_count=self.note_count,
+        )
+        path_to_save: Path = find_available_filename(file_name.format(**format_dict), overwrite=overwrite)
+        self.save_pdf_reportlab(path_to_save)
 
-        logger.info('Combining images to PDF...')
-        path_to_save: Path = find_available_filename(file_name, overwrite=overwrite)
+    def _get_pdf_metadata(self) -> dict[str, Any]:
+        return dict(
+            title=getattr(self, "title", "Music Box"),
+            author="BioHazard",
+            subject="Music Box",
+            keywords="Music Box, Music Box Designer",
+            creator="Music Box Designer",
+            producer="Music Box Designer",
+        )
+
+    def save_pdf_pillow(self, path_to_save: Path, **kwargs) -> None:
+        default_kwargs: dict[str, Any] = dict(
+            resolution=self.dpi,
+            quality=95,
+            optimize=True,
+        )
+
+        logger.info(f'Saving PDF to {path_to_save.as_posix()} using pillow ...')
+        images = [image.convert('RGB') for image in self]
+        images[0].save(path_to_save, save_all=True, append_images=images[1:], **(default_kwargs | self._get_pdf_metadata() | kwargs))
+
+    def save_pdf_fitz(self, path_to_save: Path) -> None:
+        import fitz
+        import fitz.utils
+        import io
+
+        logger.info(f'Saving PDF to {path_to_save.as_posix()} using fitz ...')
+        doc = fitz.open()  # type: ignore
+        doc.set_metadata(self._get_pdf_metadata())
+        for img in self:
+            # 将 PIL 图像转换为字节流
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+
+            # 打开图像字节流
+            img_doc = fitz.open("png", img_byte_arr)  # type: ignore
+            rect = img_doc[0].rect
+            pdf_bytes = img_doc.convert_to_pdf()
+            img_doc.close()
+
+            # 创建新的 PDF 页面并设置大小
+            width_points = rect.width * 72 / MM_PER_INCH
+            height_points = rect.height * 72 / MM_PER_INCH
+            page = doc.new_page(width=width_points, height=height_points)
+            rect = fitz.Rect(0, 0, width_points, height_points)
+
+            # 创建新的 PDF 页面并插入图像
+            img_pdf = fitz.open("pdf", pdf_bytes)  # type: ignore
+            page.show_pdf_page(rect, img_pdf, 0)
+            img_pdf.close()
+
+        # 保存并关闭文档
+        doc.save(path_to_save)
+        doc.close()
+
+    def save_pdf_reportlab(self, path_to_save: Path) -> None:
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.lib.units import mm
+
         width, height = self.paper_size
         pdf_page_size: tuple[float, float] = (width * mm, height * mm)
         canvas = Canvas(path_to_save.as_posix(), pagesize=pdf_page_size)
@@ -266,7 +348,7 @@ class ImageList(list[Image.Image]):
         canvas.setSubject('Music Box')
         canvas.setKeywords(('Music Box', 'Music Box Designer'))
         canvas.setCreator('Music Box Designer')
-        # c.setProducer('Music Box Designer')
+        canvas.setProducer('Music Box Designer')
         for image in self:
             canvas.drawInlineImage(image, 0, 0, *pdf_page_size)
             canvas.showPage()
@@ -1050,6 +1132,9 @@ class Draft:
         image_list = ImageList(Image.alpha_composite(background_image, image) for image in images)
         image_list.title = title
         image_list.paper_size = (page_width, page_height)
+        image_list.dpi = settings.ppi
+        image_list.length_mm = length_mm
+        image_list.note_count = len(self.notes)
         if self.file_path is None:
             image_list.file_name = title
         else:
