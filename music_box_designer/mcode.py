@@ -21,7 +21,9 @@ DEFAULT_PPQ: int = 96
 DEFAULT_PUNCHER_TIMES: int = 2
 DEFAULT_START_Y = 0
 DEFAULT_END_Y = 1000
-base64_regex: str = r'([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)'
+base64_regex: str = (
+    r"([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)"
+)
 
 ADD_NUMBER: dict[Literal[15, 20, 30], int] = {
     15: 101,
@@ -36,19 +38,19 @@ class MCodeMessage(NamedTuple):
     P: int = DEFAULT_PUNCHER_TIMES
 
     def __str__(self) -> str:
-        return f'M{self.M} Y{self.Y} P{self.P}'
+        return f"M{self.M} Y{self.Y} P{self.P}"
 
     @classmethod
     def from_str(cls, s: str) -> Self:
         try:
             Mxx, Yxx, Pxx = s.strip().split()
-            if Mxx[0] != 'M' or Yxx[0] != 'Y' or Pxx[0] != 'P':
+            if Mxx[0] != "M" or Yxx[0] != "Y" or Pxx[0] != "P":
                 raise ValueError
             M = int(Mxx[1:])
             Y = int(Yxx[1:])
             P = int(Pxx[1:])
         except Exception:
-            raise ValueError(f'Invalid mcode message: {s}')
+            raise ValueError(f"Invalid mcode message: {s}")
         return cls(M, Y, P)
 
 
@@ -61,16 +63,21 @@ class MCodeNote(NamedTuple):
     tick: int
 
 
-def calculate_distance(delta_index: int,
-                       delta_tick: int,
-                       ppq: int = DEFAULT_PPQ,
-                       note_count: Literal[15, 20, 30] = 30) -> float:
-    return math.hypot(delta_index * music_box_presets[note_count].grid_width,
-                      delta_tick / ppq * music_box_presets[note_count].length_mm_per_beat)
+def calculate_distance(
+    delta_index: int,
+    delta_tick: int,
+    ppq: int = DEFAULT_PPQ,
+    note_count: Literal[15, 20, 30] = 30,
+) -> float:
+    return math.hypot(
+        delta_index * music_box_presets[note_count].grid_width,
+        delta_tick / ppq * music_box_presets[note_count].length_mm_per_beat,
+    )
 
 
 class _NoteLine(NamedTuple):
     """For dynamic programming. A note line is a line of notes with the same tick."""
+
     pitch_indexes: list[int]  # Should not be empty
     tick: int
 
@@ -81,17 +88,16 @@ def _get_note_lines(notes: list[MCodeNote]) -> list[_NoteLine]:
     while i < len(notes):
         tick: int = notes[i].tick
         pitch_indexes: list[int] = []
-        while (i < len(notes)
-               and notes[i].tick == tick):
+        while i < len(notes) and notes[i].tick == tick:
             pitch_indexes.append(notes[i].pitch_index)
             i += 1
         note_lines.append(_NoteLine(pitch_indexes=pitch_indexes, tick=tick))
     return note_lines
 
 
-def get_arranged_notes(notes: list[MCodeNote],
-                       ppq: int = DEFAULT_PPQ,
-                       note_count: Literal[15, 20, 30] = 30) -> list[MCodeNote]:
+def get_arranged_notes(
+    notes: list[MCodeNote], ppq: int = DEFAULT_PPQ, note_count: Literal[15, 20, 30] = 30
+) -> list[MCodeNote]:
     # Do we have an algorithm which uses O(1) extra space?
     notes = sorted(notes, key=lambda note: (note.tick, note.pitch_index))
     note_lines: list[_NoteLine] = _get_note_lines(notes)
@@ -107,22 +113,26 @@ def get_arranged_notes(notes: list[MCodeNote],
         distance_positive_positive: float = distance_positive + calculate_distance(
             previous_note_line.pitch_indexes[-1] - current_note_line.pitch_indexes[0],
             previous_note_line.tick - current_note_line.tick,
-            ppq, note_count,
+            ppq,
+            note_count,
         )
         distance_negative_positive: float = distance_negative + calculate_distance(
             previous_note_line.pitch_indexes[0] - current_note_line.pitch_indexes[0],
             previous_note_line.tick - current_note_line.tick,
-            ppq, note_count,
+            ppq,
+            note_count,
         )
         distance_positive_negative: float = distance_positive + calculate_distance(
             previous_note_line.pitch_indexes[-1] - current_note_line.pitch_indexes[-1],
             previous_note_line.tick - current_note_line.tick,
-            ppq, note_count,
+            ppq,
+            note_count,
         )
         distance_negative_negative: float = distance_negative + calculate_distance(
             previous_note_line.pitch_indexes[0] - current_note_line.pitch_indexes[-1],
             previous_note_line.tick - current_note_line.tick,
-            ppq, note_count,
+            ppq,
+            note_count,
         )
 
         distance_positive = min(distance_positive_positive, distance_negative_positive)
@@ -134,7 +144,8 @@ def get_arranged_notes(notes: list[MCodeNote],
         current_line_distance: float = calculate_distance(
             0,
             current_note_line.pitch_indexes[-1] - current_note_line.pitch_indexes[0],
-            ppq, note_count,
+            ppq,
+            note_count,
         )
         distance_positive += current_line_distance
         distance_negative += current_line_distance
@@ -147,7 +158,9 @@ def get_arranged_notes(notes: list[MCodeNote],
         # route_positive, route_negative, note_lines have the same length.
         # route_positive[0] and route_negative[0] are meaningless.
         route_reversed.append(current_direction)
-        current_direction = route_positive[i] if current_direction else route_negative[i]
+        current_direction = (
+            route_positive[i] if current_direction else route_negative[i]
+        )
 
     notes_arranged: list[MCodeNote] = []
     for note_line, direction in zip(note_lines, reversed(route_reversed)):
@@ -164,16 +177,18 @@ def get_arranged_notes(notes: list[MCodeNote],
     return notes_arranged
 
 
-def notes_to_messages(notes: Iterable[MCodeNote],
-                      puncher_times: int = DEFAULT_PUNCHER_TIMES) -> Generator[MCodeMessage, None, None]:
+def notes_to_messages(
+    notes: Iterable[MCodeNote], puncher_times: int = DEFAULT_PUNCHER_TIMES
+) -> Generator[MCodeMessage]:
     tick: int = 0
     for note in notes:
         yield MCodeMessage(note.pitch_index, note.tick - tick, puncher_times)
         tick = note.tick
 
 
-def messages_to_notes(messages: Iterable[MCodeMessage],
-                      ignore_M90_M80_Y: bool = True) -> Generator[MCodeNote, None, None]:
+def messages_to_notes(
+    messages: Iterable[MCodeMessage], ignore_M90_M80_Y: bool = True
+) -> Generator[MCodeNote]:
     tick: int = 0
     for message in messages:
         if message.M not in (90, 80) or not ignore_M90_M80_Y:
@@ -189,12 +204,12 @@ class MCodeFile:
     note_count: Literal[15, 20, 30] = 30
     puncher_times: int = DEFAULT_PUNCHER_TIMES
     messages: list[MCodeMessage] = field(default_factory=list)
-    comments: list[str] = field(default_factory=lambda: [''] * 5)
+    comments: list[str] = field(default_factory=lambda: [""] * 5)
 
     @classmethod
     def open(cls, file: str | Path | TextIO) -> Self:
         if isinstance(file, str | Path):
-            with open(file, 'r', encoding='utf-8') as fp:
+            with open(file, "r", encoding="utf-8") as fp:
                 return cls.from_str(fp.read())
         else:
             return cls.from_str(file.read())
@@ -209,60 +224,80 @@ class MCodeFile:
         for line in lines:
             if not line:
                 continue
-            if line.startswith('//'):
+            if line.startswith("//"):
                 mcode_file.comments.append(line[2:])
             else:
                 try:
                     Mxx, Yxx, Pxx = line.strip().split()
-                    if Mxx[0] != 'M' or Yxx[0] != 'Y' or Pxx[0] != 'P':
+                    if Mxx[0] != "M" or Yxx[0] != "Y" or Pxx[0] != "P":
                         raise ValueError
                     M = int(Mxx[1:])
                     Y = int(Yxx[1:])
                     P = int(Pxx[1:])
                     mcode_file.messages.append(MCodeMessage(M, Y, P))
                 except Exception:
-                    raise ValueError(f'Invalid line: {line}')
+                    raise ValueError(f"Invalid line: {line}")
         return mcode_file
 
     @classmethod
-    def from_midi(cls,
-                  midi_file: MidiFile,
-                  note_count: Literal[15, 20, 30, None] = None,
-                  transposition: int = 0,
-                  puncher_times: int = DEFAULT_PUNCHER_TIMES,
-                  store_bytes: bool = True) -> Self:
+    def from_midi(
+        cls,
+        midi_file: MidiFile,
+        note_count: Literal[15, 20, 30] | None = None,
+        transposition: int = 0,
+        puncher_times: int = DEFAULT_PUNCHER_TIMES,
+        store_bytes: bool = True,
+    ) -> Self:
         # If note_count is None, choose the best one that can contain most notes.
         if note_count is not None:
             actual_note_count: Literal[15, 20, 30] = note_count
         else:
             note_pitches: list[int] = [
                 message.note
-                for track in midi_file.tracks for message in track
-                if message.type == 'note_on'
+                for track in midi_file.tracks
+                for message in track
+                if message.type == "note_on"
             ]
             out_of_range_note_number: dict[Literal[15, 20, 30], int] = {
-                _note_count:
-                sum(1 for note_pitch in note_pitches
-                    if note_pitch + transposition not in music_box_presets[_note_count].range)
+                _note_count: sum(
+                    1
+                    for note_pitch in note_pitches
+                    if note_pitch + transposition
+                    not in music_box_presets[_note_count].range
+                )
                 for _note_count in (15, 20, 30)
             }
-            actual_note_count = min(out_of_range_note_number, key=out_of_range_note_number.get)  # type: ignore
+            actual_note_count = min(
+                out_of_range_note_number, key=out_of_range_note_number.get
+            )  # type: ignore
 
-        mcode_file: Self = cls(puncher_times=puncher_times, note_count=actual_note_count)
+        mcode_file: Self = cls(
+            puncher_times=puncher_times, note_count=actual_note_count
+        )
         preset: MusicBox = music_box_presets[actual_note_count]
         notes: list[MCodeNote] = []
         for track in midi_file.tracks:
             midi_tick: int = 0
             for message in track:
                 midi_tick += message.time
-                if message.type == 'note_on' and message.velocity > 0:
+                if message.type == "note_on" and message.velocity > 0:
                     try:
-                        pitch_index: int = preset.range.index(message.note + transposition)
+                        pitch_index: int = preset.range.index(
+                            message.note + transposition
+                        )
                     except ValueError:
-                        logger.warning(f'Note {message.note + transposition} is not in the range of the music box.')
+                        logger.warning(
+                            f"Note {message.note + transposition} is not in the range of the music box."
+                        )
                         continue
-                    notes.append(MCodeNote(pitch_index + ADD_NUMBER[actual_note_count],
-                                           round(midi_tick / midi_file.ticks_per_beat * mcode_file.ppq)))
+                    notes.append(
+                        MCodeNote(
+                            pitch_index + ADD_NUMBER[actual_note_count],
+                            round(
+                                midi_tick / midi_file.ticks_per_beat * mcode_file.ppq
+                            ),
+                        )
+                    )
 
         notes = get_arranged_notes(notes, mcode_file.ppq, mcode_file.note_count)
 
@@ -271,33 +306,37 @@ class MCodeFile:
         mcode_file.messages.append(MCodeMessage(80, DEFAULT_END_Y, 0))
 
         total_ticks: int = notes[-1].tick if notes else 0
-        mcode_file.comments[0] = f'Total: {total_ticks} ticks'
-        mcode_file.comments[1] = f'PPQ: {mcode_file.ppq} ticks'
-        mcode_file.comments[2] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-        mcode_file.comments[3] = f'MusicBoxPuncher MCode. VERSION 1.4. Generated by Music Box Designer.'
+        mcode_file.comments[0] = f"Total: {total_ticks} ticks"
+        mcode_file.comments[1] = f"PPQ: {mcode_file.ppq} ticks"
+        mcode_file.comments[2] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        mcode_file.comments[3] = (
+            "MusicBoxPuncher MCode. VERSION 1.4. Generated by Music Box Designer."
+        )
         if store_bytes:
             bytes_io = BytesIO()
             midi_file.save(file=bytes_io)
             bytes_data: bytes = bytes_io.getvalue()
-            base64_str: str = base64.b64encode(bytes_data).decode('utf-8')
-            mcode_file.comments[4] = f'MIDI {base64_str}'
+            base64_str: str = base64.b64encode(bytes_data).decode("utf-8")
+            mcode_file.comments[4] = f"MIDI {base64_str}"
         else:
-            mcode_file.comments[4] = ''
+            mcode_file.comments[4] = ""
 
         return mcode_file
 
-    def export_midi(self,
-                    use_comment: bool = True,
-                    transposition: int = 0,
-                    ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT) -> MidiFile:
+    def export_midi(
+        self,
+        use_comment: bool = True,
+        transposition: int = 0,
+        ticks_per_beat: int = MIDI_DEFAULT_TICKS_PER_BEAT,
+    ) -> MidiFile:
         midi_file: MidiFile = MidiFile()
         midi_file.ticks_per_beat = ticks_per_beat
         midi_track: MidiTrack = MidiTrack()
 
         if use_comment:
-            match = re.search(rf'MIDI ({base64_regex})', self.comments[4])
+            match = re.search(rf"MIDI ({base64_regex})", self.comments[4])
             if match is None:
-                logger.warning('No midi data found in comments.')
+                logger.warning("No midi data found in comments.")
             else:
                 base64_str: str = match.group(1)
                 bytes_data: bytes = base64.b64decode(base64_str)
@@ -305,19 +344,34 @@ class MCodeFile:
                 return midi_file
 
         for pitch_index, tick in messages_to_notes(self.messages):
-            pitch: int = music_box_presets[self.note_count].range[pitch_index - ADD_NUMBER[self.note_count]] + transposition
+            pitch: int = (
+                music_box_presets[self.note_count].range[
+                    pitch_index - ADD_NUMBER[self.note_count]
+                ]
+                + transposition
+            )
             if pitch not in range(128):
-                logger.warning(f'Note {pitch} is not in range(128).')
+                logger.warning(f"Note {pitch} is not in range(128).")
                 continue
-            midi_track.append(Message('note_on',
-                                      note=pitch,
-                                      velocity=64,
-                                      time=round(tick / self.ppq * ticks_per_beat)))
-            midi_track.append(Message('note_off',
-                                      note=pitch,
-                                      time=round(((tick / self.ppq) + DEFAULT_DURATION) * ticks_per_beat)))
+            midi_track.append(
+                Message(
+                    "note_on",
+                    note=pitch,
+                    velocity=64,
+                    time=round(tick / self.ppq * ticks_per_beat),
+                )
+            )
+            midi_track.append(
+                Message(
+                    "note_off",
+                    note=pitch,
+                    time=round(((tick / self.ppq) + DEFAULT_DURATION) * ticks_per_beat),
+                )
+            )
         midi_track.sort(key=lambda message: message.time)
-        midi_file.tracks.append(MidiTrack(mido.midifiles.tracks._to_reltime(midi_track)))
+        midi_file.tracks.append(
+            MidiTrack(mido.midifiles.tracks._to_reltime(midi_track))
+        )
 
         return midi_file
 
@@ -325,29 +379,51 @@ class MCodeFile:
         from .draft import draw_circle, mm_to_pixel, pos_mm_to_pixel
 
         preset: MusicBox = music_box_presets[self.note_count]
-        notes: list[MCodeNote] = list(messages_to_notes(self.messages, ignore_M90_M80_Y=False))
+        notes: list[MCodeNote] = list(
+            messages_to_notes(self.messages, ignore_M90_M80_Y=False)
+        )
         tick: int = notes[-1].tick if notes else 0
         length: float = tick / self.ppq * preset.length_mm_per_beat
-        image_size: tuple[int, int] = pos_mm_to_pixel((preset.col_width, length), ppi, 'round')
-        image: Image.Image = Image.new('RGBA', image_size, 'white')
+        image_size: tuple[int, int] = pos_mm_to_pixel(
+            (preset.col_width, length), ppi, "round"
+        )
+        image: Image.Image = Image.new("RGBA", image_size, "white")
         draw: ImageDraw.ImageDraw = ImageDraw.Draw(image)
         for index, tick in notes:
             draw_circle(
                 image,
-                pos_mm_to_pixel((preset.left_border + index * preset.grid_width,
-                                 tick / self.ppq * preset.length_mm_per_beat),
-                                ppi, 'round'),
-                mm_to_pixel(1, ppi), 'black',
+                pos_mm_to_pixel(
+                    (
+                        preset.left_border + index * preset.grid_width,
+                        tick / self.ppq * preset.length_mm_per_beat,
+                    ),
+                    ppi,
+                    "round",
+                ),
+                mm_to_pixel(1, ppi),
+                "black",
             )
         for (index0, tick0), (index1, tick1) in pairwise(notes):
             draw.line(
-                (pos_mm_to_pixel((preset.left_border + index0 * preset.grid_width,
-                                  tick0 / self.ppq * preset.length_mm_per_beat),
-                                 ppi, 'round'),
-                 pos_mm_to_pixel((preset.left_border + index1 * preset.grid_width,
-                                  tick1 / self.ppq * preset.length_mm_per_beat),
-                                 ppi, 'round')),
-                'black',
+                (
+                    pos_mm_to_pixel(
+                        (
+                            preset.left_border + index0 * preset.grid_width,
+                            tick0 / self.ppq * preset.length_mm_per_beat,
+                        ),
+                        ppi,
+                        "round",
+                    ),
+                    pos_mm_to_pixel(
+                        (
+                            preset.left_border + index1 * preset.grid_width,
+                            tick1 / self.ppq * preset.length_mm_per_beat,
+                        ),
+                        ppi,
+                        "round",
+                    ),
+                ),
+                "black",
                 round(mm_to_pixel(0.5, ppi)),
             )
         return image
@@ -356,17 +432,17 @@ class MCodeFile:
         for message in self.messages:
             yield str(message)
         for comment in self.comments:
-            yield f'//{comment}'
+            yield f"//{comment}"
 
     def __str__(self) -> str:
-        return '\n'.join(self.iter_lines())
+        return "\n".join(self.iter_lines())
 
     def save(self, file: str | Path | TextIO) -> None:
         # if len(self.comments) != 5:
         #     raise ValueError(f'Length of comments should be 5, got {len(self.comments)}.')
         s: str = str(self)
         if isinstance(file, str | Path):
-            with open(file, 'w', encoding='utf-8') as fp:
+            with open(file, "w", encoding="utf-8") as fp:
                 fp.write(s)
         else:
             file.write(s)

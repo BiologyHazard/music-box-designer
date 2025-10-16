@@ -1,4 +1,4 @@
 MIDI_DEFAULT_TICKS_PER_BEAT = 96
-'''FL导出的midi默认为此值'''
+"""FL导出的midi默认为此值"""
 
 DEFAULT_DURATION = 1

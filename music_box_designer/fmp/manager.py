@@ -1,5 +1,3 @@
-from pathlib import Path
-from typing import Any, Self
 from .fmp_v0 import FmpFile as FmpFileV0
 from .fmp_v1 import FmpFile as FmpFileV1
 from .fmp_v2 import FmpFile as FmpFileV2

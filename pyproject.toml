@@ -1,0 +1,25 @@
+[project]
+name = "music-box-designer"
+version = "0.1.4"
+description = "纸带八音盒工具全家桶。.mid, .emid, .fmp, .mcode 文件之间互相转换，生成纸带设计稿图片，通过纸带设计稿识别音符，统计音符数量和纸带长度"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7.3",
+    "mido>=1.3.3",
+    "opencv-python>=4.11.0.86",
+    "pillow>=11.0.0",
+    "pydantic>=2.10.6",
+    "pydantic-extra-types>=2.10.3",
+    "pymupdf>=1.25.4",
+    "pyyaml>=6.0.2",
+    "reportlab>=4.4.4",
+]
+
+[tool.ruff]
+line-length = 88
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0",
+]

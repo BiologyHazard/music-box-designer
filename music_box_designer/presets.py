@@ -16,9 +16,14 @@ class MusicBox:
 
     def __post_init__(self) -> None:
         if len(self.range) != self.note_count:
-            raise ValueError('The length of range must be equal to notes.')
-        object.__setattr__(self, 'col_width',
-                           self.left_border + self.grid_width * (self.note_count - 1) + self.right_border)
+            raise ValueError("The length of range must be equal to notes.")
+        object.__setattr__(
+            self,
+            "col_width",
+            self.left_border
+            + self.grid_width * (self.note_count - 1)
+            + self.right_border,
+        )
 
 
 music_box_30_notes = MusicBox(
@@ -29,7 +34,7 @@ music_box_30_notes = MusicBox(
     grid_width=2,
     left_border=6,
     right_border=6,
-)
+)  # fmt: off
 
 music_box_20_notes = MusicBox(
     note_count=20,
@@ -38,7 +43,7 @@ music_box_20_notes = MusicBox(
     grid_width=3,
     left_border=6.5,
     right_border=6.5,
-)
+)  # fmt: off
 
 music_box_15_notes = MusicBox(
     note_count=15,
@@ -47,7 +52,7 @@ music_box_15_notes = MusicBox(
     grid_width=2,
     left_border=6.5,
     right_border=6.5,
-)
+)  # fmt: off
 
 music_box_presets: dict[int, MusicBox] = {
     15: music_box_15_notes,
@@ -57,27 +62,29 @@ music_box_presets: dict[int, MusicBox] = {
 
 
 @overload
-def get_preset(preset_like: int | MusicBox | None,
-               /,
-               default: None = ...) -> MusicBox | None: ...
+def get_preset(
+    preset_like: int | MusicBox | None, /, default: None = ...
+) -> MusicBox | None: ...
 
 
 @overload
-def get_preset(preset_like: int | MusicBox | None,
-               /,
-               default: MusicBox = ...) -> MusicBox: ...
+def get_preset(
+    preset_like: int | MusicBox | None, /, default: MusicBox = ...
+) -> MusicBox: ...
 
 
-def get_preset(preset_like: int | MusicBox | None,
-               /,
-               default: MusicBox | None = None) -> MusicBox | None:
+def get_preset(
+    preset_like: int | MusicBox | None, /, default: MusicBox | None = None
+) -> MusicBox | None:
     if preset_like is None:
         return default
     elif isinstance(preset_like, int):
         if preset_like not in music_box_presets:
-            raise ValueError(f'{preset_like} note music box not in presets.')
+            raise ValueError(f"{preset_like} note music box not in presets.")
         return music_box_presets[preset_like]
     elif isinstance(preset_like, MusicBox):
         return preset_like
     else:
-        raise TypeError(f'preset_like must be int, MusicBox or None, got {type(preset_like)}.')
+        raise TypeError(
+            f"preset_like must be int, MusicBox or None, got {type(preset_like)}."
+        )
