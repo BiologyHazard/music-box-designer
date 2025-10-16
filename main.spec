@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import shutil
-import time
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -75,4 +75,4 @@ shutil.copy('README.md', dest_path)
 shutil.copy('draft_settings.yml', dest_path)
 shutil.copy('fonts/SourceHanSans.otf', dest_path / 'fonts')
 zip_directory(Path(DISTPATH) / 'main',
-              Path(DISTPATH) / f'Music-Box-Designer-{time.strftime('%Y-%m-%d', time.localtime())}.zip')
+              Path(DISTPATH) / f'Music-Box-Designer-{datetime.now().strftime('%Y-%m-%d')}.zip')
