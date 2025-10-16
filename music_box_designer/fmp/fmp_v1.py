@@ -11,8 +11,8 @@ from mido import Message, MetaMessage, MidiFile, MidiTrack
 from mido import merge_tracks as mido_merge_tracks
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_serializer, field_validator
 
-from .consts import MIDI_DEFAULT_TICKS_PER_BEAT
-from .log import logger
+from ..consts import MIDI_DEFAULT_TICKS_PER_BEAT
+from ..log import logger
 
 FMP_DEFAULT_TICKS_PER_BEAT = 96
 
@@ -182,7 +182,7 @@ class FmpChannel:
     transposition: int | None = None
     note_trigger_mode: int | None = None
     inherit: bool | None = None
-    range: list[tuple[int, int]] | None = None
+    range: list[int] | None = None
     effectors: list[FmpEffector] = field(default_factory=list)
 
 
@@ -394,7 +394,7 @@ class FmpFile:
                 transposition=0,
                 note_trigger_mode=0,
                 inherit=True,
-                range=[(i, 1) for i in range(128)],
+                range=list(range(128)),
             )
             fmp_file.channels.append(channel)
 
@@ -591,12 +591,7 @@ class FmpFile:
                             assert value_length == 1
                             channel.inherit = read_bool(file)
                         case 'rg':
-                            channel.range = []
-                            assert value_length % 2 == 0
-                            for _ in range(value_length // 2):
-                                pitch = read_int(file, 1)
-                                polyphony = read_int(file, 1)
-                                channel.range.append((pitch, polyphony))
+                            channel.range = [read_int(file, 1) for _ in range(value_length)]
                         case _:
                             raise ValueError
 
@@ -741,7 +736,7 @@ class FmpFile:
             write_int(file, len(self.tracks), 4)
             for track in self.tracks:
                 file.write(b'\x01')
-                write_int(file, len(track.notes) * 12 + len(track.name.encode()) + 39, 4)
+                write_int(file, len(track.notes) * 12 + len(track.name) + 39, 4)
                 write_int(file, len(track.name.encode()) + 19, 4)
                 write_int(file, len(track.name.encode()), 2)
                 file.write(track.name.encode())
@@ -832,11 +827,9 @@ class FmpFile:
                     write_bool(file, channel.inherit)
                 if channel.range is not None:
                     write_int(file, 2, 1)
-                    write_int(file, len(channel.range) * 2, 3)
+                    write_int(file, len(channel.range), 3)
                     file.write(b'rg')
-                    for pitch, polyphony in channel.range:
-                        write_int(file, pitch, 1)
-                        write_int(file, polyphony, 1)
+                    file.write(bytes(channel.range))
 
                 with LengthWriter(file, 0, 4):
                     write_int(file, len(channel.effectors), 4)
@@ -845,7 +838,7 @@ class FmpFile:
                         file.write(effector.effector_name.encode())
                         write_bool(file, effector.enabled)
                         write_float(file, effector.mix_level, 4)
-                        bytes_data = effector.effect_values.model_dump_json(exclude_unset=True).encode()
+                        bytes_data = effector.effect_values.model_dump_json().encode()
                         write_int(file, len(bytes_data), 4)
                         file.write(bytes_data)
 
@@ -863,14 +856,14 @@ class FmpFile:
             file.write(self.ignore_issues.encode())
         if self.instrument_cfg is not None:
             write_int(file, 14, 1)
-            bytes_data: bytes = self.instrument_cfg.model_dump_json(exclude_unset=True).encode()
+            bytes_data: bytes = self.instrument_cfg.model_dump_json().encode()
             write_int(file, len(bytes_data) + 1, 3)
             file.write(b'instrument_cfg')
             file.write(bytes_data)
             file.write(bytes(1))
         if self.dgprogram_cfg is not None:
             write_int(file, 13, 1)
-            bytes_data: bytes = self.dgprogram_cfg.model_dump_json(exclude_unset=True).encode()
+            bytes_data: bytes = self.dgprogram_cfg.model_dump_json().encode()
             write_int(file, len(bytes_data) + 1, 3)
             file.write(b'dgprogram_cfg')
             file.write(bytes_data)
