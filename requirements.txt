@@ -1,9 +1,0 @@
-loguru
-mido
-opencv-python
-Pillow
-pydantic
-pydantic-extra-types
-PyMuPDF
-PyYAML
-reportlab
